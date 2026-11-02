@@ -15,3 +15,5 @@ The administrator can set the fee for each transfer in the Administration area:
 Fee values are initially zero. Set the amounts in Administration before collecting fees. The fee is deducted atomically with the transfer and recorded in the fee collection table.
 
 The browser uses the Supabase publishable key. Never place a Supabase secret or service-role key in frontend files.
+
+Each successful transfer now opens a receipt showing the crypto amount, live USD unit price, USD equivalent, fee, recipient, date/time, status, and transaction reference. Market prices are retrieved from CoinGecko at transfer time and saved with the transaction.

@@ -85,7 +85,9 @@ function transactionRow(tx){
   const sign=tx.transaction_type==="admin_credit"||(!sent&&tx.transaction_type==="transfer")?"+":"−";
   const amountClass=sign==="+"?"positive":"negative";
   const when=new Date(tx.created_at).toLocaleString();
-  return `<div class="tx-row"><div class="tx-icon ${amountClass}">${sign==="+"?"↓":"↑"}</div><div class="tx-info"><b>${label}</b><small>${escapeHtml(tx.description||"Transfer")} · ${when}</small></div><div class="tx-amount ${amountClass}">${sign}${fmt(tx.amount)} ${tx.asset}</div></div>`;
+  const market=tx.market_price_usd?` · $${Number(tx.market_price_usd).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}/${tx.asset}`:"";
+  const usd=tx.usd_value?` · $${Number(tx.usd_value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`:"";
+  return `<div class="tx-row"><div class="tx-icon ${amountClass}">${sign==="+"?"↓":"↑"}</div><div class="tx-info"><b>${label}</b><small>${escapeHtml(tx.description||"Transfer")} · ${when}${market}${usd}</small></div><div class="tx-amount ${amountClass}">${sign}${fmt(tx.amount)} ${tx.asset}</div></div>`;
 }
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function loadTransactions(){
@@ -104,15 +106,41 @@ $("copy-wallet-address").addEventListener("click",async()=>{
 });
 document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>$ (b.dataset.close).classList.add("hidden")));
 $("send-modal").addEventListener("click",e=>{if(e.target===$("send-modal"))$("send-modal").classList.add("hidden");});
+async function getLivePrice(asset){
+ const ids={BTC:"bitcoin",ETH:"ethereum",USDT:"tether"};
+ const response=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids[asset]}&vs_currencies=usd`,{cache:"no-store"});
+ if(!response.ok)throw new Error("Live market price is temporarily unavailable. Please try again.");
+ const data=await response.json();const price=Number(data?.[ids[asset]]?.usd);
+ if(!Number.isFinite(price)||price<=0)throw new Error("Unable to retrieve the live market price.");
+ return price;
+}
+function showReceipt(tx,recipient){
+ const amount=Number(tx.amount), price=Number(tx.market_price_usd), usd=Number(tx.usd_value);
+ $("receipt-amount").textContent=`${fmt(amount)} ${tx.asset}`;
+ $("receipt-usd").textContent=`$${usd.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})} USD`;
+ $("receipt-price").textContent=`$${price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:tx.asset==="USDT"?4:2})} USD / ${tx.asset}`;
+ $("receipt-coin-amount").textContent=`${fmt(amount)} ${tx.asset}`;
+ $("receipt-recipient").textContent=recipient;
+ $("receipt-fee").textContent=Number(tx.fee_amount)>0?`${fmt(tx.fee_amount)} ${tx.fee_asset}`:"No fee";
+ $("receipt-date").textContent=new Date(tx.created_at).toLocaleString();
+ $("receipt-reference").textContent=tx.id;
+ $("receipt-modal").classList.remove("hidden");
+}
+$("receipt-done").addEventListener("click",()=>$("receipt-modal").classList.add("hidden"));
 $("send-form").addEventListener("submit",async e=>{
  e.preventDefault();const btn=e.submitter;btn.disabled=true;showMessage("send-message","Processing transfer…");
  try{
-  const {data,error}=await db.rpc("transfer_balance",{recipient_wallet_address:$("recipient").value.trim(),asset_code:$("send-asset").value,transfer_amount:Number($("send-amount").value)});
+  const asset=$("send-asset").value, amount=Number($("send-amount").value), recipient=$("recipient").value.trim();
+  const marketPrice=await getLivePrice(asset);
+  const {data,error}=await db.rpc("transfer_balance_with_price",{recipient_wallet_address:recipient,asset_code:asset,transfer_amount:amount,market_price_usd:marketPrice});
   if(error)throw error;
-  showMessage("send-message","Transfer completed. Reference: "+data);
-  $("send-form").reset();await loadBalances();await loadTransactions();
+  const {data:storedTx}=await db.from("wallet_transactions").select("id,asset,amount,created_at,fee_amount,fee_asset,market_price_usd,usd_value").eq("id",data).maybeSingle();
+  const tx=storedTx||{id:data,asset,amount,created_at:new Date().toISOString(),fee_amount:feeSettings[asset]?.amount||0,fee_asset:feeSettings[asset]?.asset||asset,market_price_usd:marketPrice,usd_value:amount*marketPrice};
+  $("send-modal").classList.add("hidden");$("send-form").reset();
+  await loadBalances();await loadTransactions();showReceipt(tx,recipient);
  }catch(err){showMessage("send-message",err.message||"Transfer failed.",true);}finally{btn.disabled=false;}
 });
+
 document.querySelectorAll(".side-link").forEach(b=>b.addEventListener("click",()=>goSection(b.dataset.section)));
 document.querySelectorAll("[data-goto]").forEach(b=>b.addEventListener("click",()=>goSection(b.dataset.goto)));
 function goSection(name){
