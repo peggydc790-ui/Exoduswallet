@@ -39,14 +39,15 @@
 <div id="app-view" class="app-shell hidden">
   <aside class="sidebar">
     <a class="brand" href="#"><span class="brand-icon">£</span><span> xodus<span class="violet">.</span>wallet</span></a>
-    <div class="side-label">WORKSPACE</div>
+    <div class="side-label">MENU</div>
     <button class="side-link active" data-section="overview"><span>◫</span> Overview</button>
     <button class="side-link" data-section="activity"><span>↔</span> Transactions</button>
+    <button class="side-link" data-section="withdraw"><span>⇧</span> Withdraw</button>
     <button class="side-link hidden" id="admin-nav" data-section="admin"><span>⚙</span> Administration</button>
     <div class="sidebar-bottom"><div class="account-mini"><div class="avatar" id="avatar">M</div><div><b id="side-username">Member</b><small id="side-email"></small></div></div><button id="logout" class="logout">↪ Sign out</button></div>
   </aside>
   <main class="main-area">
-    <header class="app-header"><div><div class="eyebrow">PERSONAL WORKSPACE</div><h1 id="page-title">Overview</h1></div><div class="header-right"><span class="status-pill"><i></i> Account active</span><div class="avatar" id="header-avatar">M</div></div></header>
+    <header class="app-header"><div><div class="eyebrow">ACCOUNT</div><h1 id="page-title">Overview</h1></div><div class="header-right"><span class="status-pill"><i></i> Account active</span><div class="avatar" id="header-avatar">M</div></div></header>
     <section id="overview-section" class="page-section">
       <div class="welcome-row"><div><div class="eyebrow">YOUR ACCOUNT</div><h2>Welcome back, <span id="welcome-name">Member</span>.</h2><p class="muted">Your balances at a glance.</p></div><button class="btn primary" id="open-send">Send balance <span>↗</span></button></div>
       <article class="portfolio-card" aria-label="Portfolio total balance">
@@ -70,6 +71,23 @@
       <div class="section-title"><div><div class="eyebrow">LATEST ACTIVITY</div><h3>Recent transactions</h3></div><button class="text-button" data-goto="activity">View all →</button></div>
       <div id="recent-list" class="transaction-list"><div class="empty-state">Loading your activity…</div></div>
     </section>
+    <section id="withdraw-section" class="page-section hidden">
+      <div class="withdraw-hero"><div class="eyebrow">EXTERNAL PAYOUT REQUEST</div><h2>Withdraw to an external wallet</h2><p>Request a BTC, ETH or USDT payout to a wallet you control. Review the fee and network carefully before submitting.</p><div class="withdraw-assets"><span>₿ Bitcoin</span><span>◆ Ethereum</span><span>₮ Tether</span></div></div>
+      <div class="withdraw-layout"><article class="panel"><div class="eyebrow">NEW REQUEST</div><h3>Withdrawal details</h3>
+        <form id="withdraw-form">
+          <label>Asset to receive<select id="withdraw-asset" required><option value="BTC">BTC · Bitcoin</option><option value="ETH">ETH · Ethereum</option><option value="USDT">USDT · Tether</option></select></label>
+          <label>Amount in USD<input id="withdraw-usd" type="number" min="10" step="0.01" placeholder="10000.00" required></label>
+          <label>Destination wallet address<input id="withdraw-destination" required autocomplete="off" placeholder="Paste your external wallet address"></label>
+          <label>Receiving network<select id="withdraw-network" required></select></label>
+          <label>Pay the service fee with<select id="withdraw-fee-asset" required><option value="BTC">Bitcoin (BTC)</option><option value="USDT">Tether (USDT · TRC-20)</option><option value="ETH">Ethereum (ETH)</option></select></label>
+          <div class="withdraw-quote" id="withdraw-quote"><div><span>Requested payout</span><b>$—</b></div><div><span>Platform service fee (5%)</span><b>$—</b></div><div><span>Network gas</span><b>Shown separately if applicable</b></div><div class="quote-total"><span>Customer payout</span><b>$—</b></div></div>
+          <p class="withdraw-disclosure">The 5% charge is a platform service fee, not blockchain gas. Any actual network fee must be disclosed separately. A request is not a completed payout. Funds are sent only after the fee and available payout funds are independently verified and the request is approved.</p>
+          <button class="btn primary full" type="submit">Continue to fee payment ↗</button><div id="withdraw-message" class="message" role="status"></div>
+        </form>
+      </article>
+      <aside class="panel fee-wallet-panel"><div class="eyebrow">FEE PAYMENT DESTINATIONS</div><h3>Official receiving wallets</h3><div id="fee-wallet-details"></div><p class="withdraw-disclosure">Only pay the currency and network shown on your payment instruction. Sending funds on a different network may result in permanent loss. Confirm the address independently before sending.</p></aside></div>
+      <article class="panel withdraw-history-panel"><div class="eyebrow">YOUR REQUESTS</div><h3>Withdrawal history</h3><div id="withdraw-history" class="withdraw-history">Loading requests…</div></article>
+    </section>
     <section id="activity-section" class="page-section hidden">
       <div class="section-title"><div><div class="eyebrow">ACCOUNT HISTORY</div><h3>All transactions</h3></div><button class="btn secondary" id="refresh-activity">Refresh</button></div>
       <div id="all-list" class="transaction-list"><div class="empty-state">Loading…</div></div>
@@ -82,6 +100,7 @@
         <article class="panel fee-panel"><div class="eyebrow">TRANSFER SETTINGS</div><h3>Transfer fees</h3><p class="muted">Set the fee charged for each asset transfer.</p><form id="fee-form"><label>BTC transfer fee (BTC)<input id="fee-BTC" type="number" min="0" step="any" required></label><label>ETH transfer fee (ETH)<input id="fee-ETH" type="number" min="0" step="any" required></label><label>USDT transfer fee (ETH)<input id="fee-USDT" type="number" min="0" step="any" required></label><button class="btn primary full" type="submit">Save fee settings</button></form><div id="fee-message" class="message"></div></article>
         <article class="panel"><div class="eyebrow">RISK CONTROLS</div><h3>Transfer limits</h3><form id="limit-form"><label>Asset<input id="limit-asset" list="asset-options" value="BTC" required></label><label>Minimum amount<input id="limit-min" type="number" min="0" step="any" value="0" required></label><label>Maximum amount<input id="limit-max" type="number" min="0" step="any" placeholder="Leave empty for no maximum"></label><button class="btn primary full" type="submit">Save transfer limits</button></form><div id="limit-message" class="message"></div></article>
       </div>
+      <article class="panel withdrawal-admin-panel"><div class="eyebrow">PAYOUT OPERATIONS</div><h3>External withdrawal requests</h3><div id="admin-withdrawals" class="withdraw-history">Admin queue loads after database migration.</div></article>
     </section>
   </main>
 </div>

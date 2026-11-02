@@ -1,0 +1,111 @@
+-- £xodus.wallet external withdrawal request intake (manual review/payout).
+-- This does NOT send cryptocurrency or verify incoming payments on-chain.
+-- Run this migration in Supabase SQL Editor before enabling the Withdraw page.
+
+create table if not exists public.external_withdrawal_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete restrict,
+  amount_usd numeric(24,2) not null check (amount_usd >= 10),
+  fee_usd numeric(24,2) not null check (fee_usd >= 0),
+  payout_asset text not null check (payout_asset in ('BTC','ETH','USDT')),
+  destination_network text not null check (destination_network in ('Bitcoin','Ethereum','Ethereum (ERC-20)','TRON (TRC-20)')),
+  destination_address text not null check (length(destination_address) between 20 and 160),
+  fee_asset text not null check (fee_asset in ('BTC','ETH','USDT')),
+  fee_amount numeric(36,18) not null check (fee_amount > 0),
+  fee_wallet_address text not null,
+  fee_network text not null,
+  fee_market_price_usd numeric(24,10) not null check (fee_market_price_usd > 0),
+  status text not null default 'awaiting_fee' check (status in ('awaiting_fee','fee_verified','processing','completed','rejected')),
+  fee_txid text,
+  payout_txid text,
+  admin_note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint withdrawal_fee_is_five_percent check (fee_usd = round(amount_usd * 0.05, 2))
+);
+
+create index if not exists external_withdrawal_requests_user_created_idx
+  on public.external_withdrawal_requests(user_id, created_at desc);
+create index if not exists external_withdrawal_requests_status_created_idx
+  on public.external_withdrawal_requests(status, created_at desc);
+
+create or replace function public.set_withdrawal_fee_destination()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  new.fee_usd := round(new.amount_usd * 0.05, 2);
+  new.fee_amount := round(new.fee_usd / new.fee_market_price_usd, 18);
+  if new.fee_asset = 'BTC' then
+    new.fee_wallet_address := 'bc1qsuk7udxhex7dz5z8vrd4cgxtvd2mrayd24ym8p';
+    new.fee_network := 'Bitcoin';
+  elsif new.fee_asset = 'ETH' then
+    new.fee_wallet_address := '0xEb089613B84088714AFACB3Cd006C8b1b657627D';
+    new.fee_network := 'Ethereum';
+  elsif new.fee_asset = 'USDT' then
+    new.fee_wallet_address := 'TDnFeHbnJpDqq3PDQ4mEQK84LwZammo5fB';
+    new.fee_network := 'TRON (TRC-20)';
+  end if;
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_set_withdrawal_fee_destination on public.external_withdrawal_requests;
+create trigger trg_set_withdrawal_fee_destination
+before insert on public.external_withdrawal_requests
+for each row execute function public.set_withdrawal_fee_destination();
+
+alter table public.external_withdrawal_requests enable row level security;
+revoke all on public.external_withdrawal_requests from anon;
+revoke all on public.external_withdrawal_requests from authenticated;
+grant select, insert on public.external_withdrawal_requests to authenticated;
+grant update(status, payout_txid) on public.external_withdrawal_requests to authenticated;
+
+drop policy if exists "Users create own withdrawal requests" on public.external_withdrawal_requests;
+create policy "Users create own withdrawal requests"
+on public.external_withdrawal_requests for insert to authenticated
+with check (
+  user_id = auth.uid()
+  and status = 'awaiting_fee'
+  and payout_txid is null
+  and fee_txid is null
+  and admin_note is null
+);
+
+drop policy if exists "Users read own withdrawal requests" on public.external_withdrawal_requests;
+create policy "Users read own withdrawal requests"
+on public.external_withdrawal_requests for select to authenticated
+using (user_id = auth.uid());
+
+drop policy if exists "Admins read all withdrawal requests" on public.external_withdrawal_requests;
+create policy "Admins read all withdrawal requests"
+on public.external_withdrawal_requests for select to authenticated
+using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+
+drop policy if exists "Admins update withdrawal status" on public.external_withdrawal_requests;
+create policy "Admins update withdrawal status"
+on public.external_withdrawal_requests for update to authenticated
+using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
+with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+
+-- No customer can self-mark a fee as paid or a withdrawal as completed.
+-- Admin must verify payment on-chain and enter the actual outgoing transaction hash.
+
+create or replace function public.submit_withdrawal_fee_txid(request_id uuid, transaction_hash text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then raise exception 'Authentication required'; end if;
+  if transaction_hash is null or length(trim(transaction_hash)) < 20 or length(trim(transaction_hash)) > 160 then
+    raise exception 'Enter a valid blockchain transaction ID';
+  end if;
+  update public.external_withdrawal_requests
+  set fee_txid = trim(transaction_hash), status = 'awaiting_fee', updated_at = now()
+  where id = request_id and user_id = auth.uid() and status = 'awaiting_fee' and fee_txid is null;
+  if not found then raise exception 'Request not found or fee reference already submitted'; end if;
+end;
+$$;
+revoke all on function public.submit_withdrawal_fee_txid(uuid,text) from public, anon;
+grant execute on function public.submit_withdrawal_fee_txid(uuid,text) to authenticated;
