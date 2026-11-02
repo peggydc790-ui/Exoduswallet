@@ -53,14 +53,9 @@ async function boot(){
   $("welcome-name").textContent=username; $("side-username").textContent=username; $("side-email").textContent=user.email||"";
   $("avatar").textContent=initial; $("header-avatar").textContent=initial;
   $("admin-nav").classList.toggle("hidden",profile.role!=="admin");
-  await loadAssetRegistry(); await loadBalances(); await loadTransactions(); await loadFeeSettings(); await loadCatalogue(); await recordLoginEvent(); await loadLoginHistory(); if(profile.role==="admin") await loadAdminStats();
+  await loadAssetRegistry(); await loadBalances(); await loadPortfolio(); await loadTransactions(); await loadFeeSettings(); await loadCatalogue(); await recordLoginEvent(); await loadLoginHistory(); if(profile.role==="admin") await loadAdminStats();
 }
 function showAuth(){currentUser=null;currentProfile=null;$("app-view").classList.add("hidden");$("auth-view").classList.remove("hidden");}
-async function loadBalances(){
-  const {data,error}=await db.from("wallet_balances").select("asset,balance").eq("user_id",currentUser.id);
-  if(error) throw error;
-  for(const asset of ASSETS){const row=(data||[]).find(x=>x.asset===asset);$("balance-"+asset).textContent=`${fmt(row?.balance)} ${asset}`;}
-}
 async function loadFeeSettings(){
   const {data,error}=await db.from("wallet_fee_settings").select("transfer_asset,fee_asset,fee_amount");
   if(error) throw error;
@@ -141,7 +136,7 @@ $("send-form").addEventListener("submit",async e=>{
   const {data:storedTx}=await db.from("wallet_transactions").select("id,asset,amount,created_at,fee_amount,fee_asset,market_price_usd,usd_value").eq("id",data).maybeSingle();
   const tx=storedTx||{id:data,asset,amount,created_at:new Date().toISOString(),fee_amount:feeSettings[asset]?.amount||0,fee_asset:feeSettings[asset]?.asset||asset,market_price_usd:marketPrice,usd_value:amount*marketPrice};
   $("send-modal").classList.add("hidden");$("send-form").reset();
-  await loadBalances();await loadTransactions();showReceipt(tx,recipient);
+  await loadBalances();await loadPortfolio();await loadTransactions();showReceipt(tx,recipient);
  }catch(err){showMessage("send-message",err.message||"Transfer failed.",true);}finally{btn.disabled=false;}
 });
 
@@ -182,11 +177,21 @@ db.auth.getSession().then(({data})=>{if(data.session)boot().catch(err=>toast(err
 async function loadBalances(){
  const {data,error}=await db.from("wallet_balances").select("asset,balance").eq("user_id",currentUser.id);
  if(error)throw error;
- const rows=data||[]; ASSETS=[...new Set([...Object.keys(assetMeta),...rows.map(x=>x.asset)])].sort((a,b)=>["BTC","ETH","USDT"].indexOf(a)-["BTC","ETH","USDT"].indexOf(b));
- const grid=$("wallet-asset-grid"); grid.innerHTML=isMasterAdmin?ASSETS.map(asset=>`<article class="asset-card"><div class="asset-head"><span class="coin">∞</span><span class="asset-code">${escapeHtml(asset)}</span></div><div class="asset-balance">∞</div><div class="asset-foot">${escapeHtml(assetMeta[asset]?.name||asset)}</div></article>`).join(""):rows.length?rows.map(row=>`<article class="asset-card"><div class="asset-head"><span class="coin">${escapeHtml((row.asset||"?").slice(0,1))}</span><span class="asset-code">${escapeHtml(row.asset)}</span></div><div class="asset-balance">${fmt(row.balance)} ${escapeHtml(row.asset)}</div><div class="asset-foot">${escapeHtml(assetMeta[row.asset]?.name||row.asset)}</div></article>`).join(""):'<div class="empty-state">No funded assets yet. Browse the catalogue below.</div>';
- const opts=ASSETS.map(a=>`<option value="${escapeHtml(a)}">`).join("");
- if($("asset-options"))$("asset-options").innerHTML=opts;
- if($("send-asset-options"))$("send-asset-options").innerHTML=opts;
+ const rows=data||[];
+ const pinned=["BTC","ETH","USDT"];
+ const extras=[...new Set(rows.map(x=>x.asset).filter(Boolean))].filter(a=>!pinned.includes(a)).sort((a,b)=>a.localeCompare(b));
+ ASSETS=[...pinned,...extras];
+ const byAsset=new Map(rows.map(row=>[row.asset,row]));
+ const grid=$("wallet-asset-grid");
+ const displayAssets=isMasterAdmin?[...new Set([...pinned,...Object.keys(assetMeta).filter(a=>!pinned.includes(a)),...extras])]:ASSETS;
+ grid.innerHTML=displayAssets.map(asset=>{
+   const row=byAsset.get(asset), amount=isMasterAdmin?"∞":fmt(row?.balance??0), name=assetMeta[asset]?.name||asset;
+   const icon=asset==="BTC"?"₿":asset==="ETH"?"◆":asset==="USDT"?"₮":asset.slice(0,2);
+   return `<article class="asset-card"><div class="asset-head"><span class="coin ${asset.toLowerCase()}">${escapeHtml(icon)}</span><span class="asset-code">${escapeHtml(asset)}</span></div><div class="asset-balance">${amount} ${isMasterAdmin?"":escapeHtml(asset)}</div><div class="asset-foot">${escapeHtml(name)}</div></article>`;
+ }).join("");
+ const options=ASSETS.map(asset=>`<option value="${escapeHtml(asset)}">${escapeHtml(asset)} · ${escapeHtml(assetMeta[asset]?.name||asset)}</option>`).join("");
+ const send=$("send-asset"); if(send){const selected=ASSETS.includes(send.value)?send.value:"BTC";send.innerHTML=options;send.value=selected;}
+ if($("asset-options"))$("asset-options").innerHTML=ASSETS.map(a=>`<option value="${escapeHtml(a)}">`).join("");
 }
 async function loadCatalogue(search=""){
  const box=$("catalogue-list"); if(!box)return;
@@ -208,9 +213,48 @@ async function addCatalogueCoin(button){
  button.disabled=true;
  try{
   const {error}=await db.rpc("register_crypto_asset",{asset_symbol:sym,asset_name:name,market_id:id,asset_image:image}); if(error)throw error;
-  assetMeta[sym]={id,name}; await loadBalances(); button.textContent="Added";toast(`${name} added to supported assets.`);
+  assetMeta[sym]={id,name,image}; await loadBalances(); await loadPortfolio(); button.textContent="Added";button.disabled=true;toast(`${name} added to supported assets.`);
  }catch(err){button.disabled=false;toast(err.message||"Unable to add this asset.");}
 }
+async function loadPortfolio(){
+ const {data,error}=await db.from("wallet_balances").select("asset,balance").eq("user_id",currentUser.id);
+ if(error)throw error;
+ const rows=data||[], pinned=["BTC","ETH","USDT"];
+ const order=[...pinned,...[...new Set(rows.map(r=>r.asset).filter(a=>a&&!pinned.includes(a)))].sort((a,b)=>a.localeCompare(b))];
+ const byAsset=new Map(rows.map(r=>[r.asset,r]));
+ if(isMasterAdmin){
+  $("portfolio-total").textContent="∞";
+  $("portfolio-change").textContent="Administrator unlimited-balance entitlement";
+  $("portfolio-updated").textContent="Internal account display";
+  $("portfolio-breakdown").innerHTML=order.map(a=>`<div class="portfolio-line"><span>${escapeHtml(a)} · ${escapeHtml(assetMeta[a]?.name||a)}</span><b>∞</b></div>`).join("");
+  return;
+ }
+ const ids=[...new Set(order.map(a=>assetMeta[a]?.id).filter(Boolean))];
+ let prices={};
+ try{
+  if(ids.length){const response=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids.join(","))}&vs_currencies=usd&include_24hr_change=true`,{cache:"no-store"});if(!response.ok)throw new Error("Market prices temporarily unavailable");prices=await response.json();}
+ }catch(e){
+  $("portfolio-total").textContent="—";
+  $("portfolio-change").textContent="Live valuation temporarily unavailable";
+  $("portfolio-updated").textContent="Balances remain available below";
+  $("portfolio-breakdown").innerHTML=order.map(a=>`<div class="portfolio-line"><span>${escapeHtml(a)} · ${escapeHtml(assetMeta[a]?.name||a)} (${fmt(byAsset.get(a)?.balance??0)})</span><b>Price unavailable</b></div>`).join("");
+  return;
+ }
+ let total=0, previous=0, allPriced=true;
+ const lines=order.map(asset=>{
+  const amount=Number(byAsset.get(asset)?.balance??0), id=assetMeta[asset]?.id, price=Number(prices[id]?.usd);
+  if(!id||!Number.isFinite(price)||price<=0){allPriced=false;return `<div class="portfolio-line"><span>${escapeHtml(asset)} · ${escapeHtml(assetMeta[asset]?.name||asset)} (${fmt(amount)})</span><b>Unpriced</b></div>`;}
+  const value=amount*price;total+=value;
+  const pct=Number(prices[id]?.usd_24h_change);if(Number.isFinite(pct)&&1+pct/100>0)previous+=value/(1+pct/100);
+  return `<div class="portfolio-line"><span>${escapeHtml(asset)} · ${escapeHtml(assetMeta[asset]?.name||asset)} (${fmt(amount)})</span><b>$${value.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div>`;
+ }).join("");
+ $("portfolio-total").textContent=`$${total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+ $("portfolio-change").textContent=!allPriced?"Partial valuation · some assets are unpriced":previous>0?`${total>=previous?"+":""}${((total-previous)/previous*100).toFixed(2)}% over 24h`:"24h change unavailable";
+ $("portfolio-updated").textContent=`Updated ${new Date().toLocaleTimeString()}`;
+ $("portfolio-breakdown").innerHTML=lines;
+}
+$("refresh-portfolio")?.addEventListener("click",()=>loadPortfolio().catch(e=>toast(e.message)));
+setInterval(()=>{if(currentUser&&!document.hidden)loadPortfolio().catch(()=>{});},60000);
 async function loadAdminStats(){try{const {data,error}=await db.rpc("admin_dashboard_stats");if(error)throw error;$("admin-stats").innerHTML=`<div class="stat-card"><small>Total members</small><b>${Number(data.members).toLocaleString()}</b></div><div class="stat-card"><small>Transactions</small><b>${Number(data.transactions).toLocaleString()}</b></div><div class="stat-card"><small>Suspended members</small><b>${Number(data.suspended_members).toLocaleString()}</b></div>`;}catch(e){$("admin-stats").textContent=e.message;}}
 $("coin-search")?.addEventListener("input",e=>{clearTimeout(coinSearchTimer);coinSearchTimer=setTimeout(()=>loadCatalogue(e.target.value),450);});
 $("load-more-coins")?.addEventListener("click",()=>{cataloguePage++;loadCatalogue();});
