@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<meta name="description" content="£xodus.wallet">
+<title>£xodus.wallet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="auth-view" class="auth-shell">
+  <header class="topbar"><a class="brand" href="#"><span class="brand-icon">£</span><span> xodus<span class="violet">.</span>wallet</span></a><span class="secure-label">ACCOUNT ACCESS</span></header>
+  <main class="auth-main">
+    <section class="intro">
+      <div class="eyebrow"><span class="pulse"></span> £XODUS.WALLET</div>
+      <h1>Your money.<br><span>Your space.</span></h1>
+    </section>
+    <section class="auth-card">
+      <div class="brand-mark">£</div>
+      <div class="eyebrow">WELCOME TO £XODUS.WALLET</div>
+      <h2 id="auth-title">Sign in to your account</h2>
+      <p id="auth-subtitle" class="muted">Enter your details to continue.</p>
+      <form id="auth-form">
+        <label id="username-wrap" class="hidden">Username<input id="username" minlength="3" maxlength="24" autocomplete="username" placeholder="Choose a username"></label>
+        <label>Email address<input id="email" type="email" required autocomplete="email" placeholder="name@example.com"></label>
+        <label>Password<input id="password" type="password" required minlength="8" autocomplete="current-password" placeholder="At least 8 characters"></label>
+        <button id="forgot-password" class="text-button auth-forgot" type="button">Forgot password?</button>
+        <button id="auth-submit" class="btn primary full" type="submit">Sign in <span>↗</span></button>
+        <div id="auth-message" class="message" role="status"></div>
+      </form>
+      <div class="switch-auth"><span id="switch-label">New to £xodus.wallet?</span> <button id="switch-auth" type="button">Create an account</button></div>
+    </section>
+  </main>
+  <footer class="auth-footer"><span>© 2026 £xodus.wallet</span></footer>
+</div>
+
+<div id="app-view" class="app-shell hidden">
+  <aside class="sidebar">
+    <a class="brand" href="#"><span class="brand-icon">£</span><span> xodus<span class="violet">.</span>wallet</span></a>
+    <div class="side-label">MENU</div>
+    <button class="side-link active" data-section="overview"><span>◫</span> Overview</button>
+    <button class="side-link" data-section="activity"><span>↔</span> Transactions</button>
+    <button class="side-link" data-section="withdraw"><span>⇧</span> Withdraw</button>
+    <button class="side-link hidden" id="admin-nav" data-section="admin"><span>⚙</span> Administration</button>
+    <div class="sidebar-bottom"><div class="account-mini"><div class="avatar" id="avatar">M</div><div><b id="side-username">Member</b><small id="side-email"></small></div></div><button id="logout" class="logout">↪ Sign out</button></div>
+  </aside>
+  <main class="main-area">
+    <header class="app-header"><div><div class="eyebrow">ACCOUNT</div><h1 id="page-title">Overview</h1></div><div class="header-right"><span class="status-pill"><i></i> Account active</span><div class="avatar" id="header-avatar">M</div></div></header>
+    <section id="overview-section" class="page-section">
+      <div class="welcome-row"><div><div class="eyebrow">YOUR ACCOUNT</div><h2>Welcome back, <span id="welcome-name">Member</span>.</h2><p class="muted">Your balances at a glance.</p></div><button class="btn primary" id="open-send">Send balance <span>↗</span></button></div>
+      <article class="portfolio-card" aria-label="Portfolio total balance">
+        <div class="portfolio-top"><div><div class="eyebrow">PORTFOLIO</div><div class="portfolio-caption">Total portfolio value</div></div><button id="refresh-portfolio" class="portfolio-refresh" type="button">↻ Refresh</button></div>
+        <div id="portfolio-total" class="portfolio-total">$—</div>
+        <div class="portfolio-foot"><span id="portfolio-change">Calculating your holdings</span><span id="portfolio-updated">Awaiting prices</span></div>
+        <div id="portfolio-breakdown" class="portfolio-breakdown"><div class="portfolio-line"><span>BTC · Bitcoin</span><b>Loading…</b></div><div class="portfolio-line"><span>ETH · Ethereum</span><b>Loading…</b></div><div class="portfolio-line"><span>USDT · Tether</span><b>Loading…</b></div></div>
+      </article>
+      <div class="asset-grid" id="wallet-asset-grid">
+        <article class="asset-card"><div class="asset-head"><span class="coin btc">₿</span><span class="asset-code">BTC</span></div><div class="asset-balance" id="balance-BTC">— BTC</div></article>
+        <article class="asset-card"><div class="asset-head"><span class="coin eth">◆</span><span class="asset-code">ETH</span></div><div class="asset-balance" id="balance-ETH">— ETH</div></article>
+        <article class="asset-card"><div class="asset-head"><span class="coin usdt">₮</span><span class="asset-code">USDT</span></div><div class="asset-balance" id="balance-USDT">— USDT</div></article>
+      </div>
+      <article class="wallet-address-card"><div><div class="eyebrow">WALLET ADDRESS</div><div id="wallet-address" class="wallet-address-value">Loading…</div></div><button class="btn secondary" id="copy-wallet-address" type="button">Copy</button></article>
+
+      <div class="catalogue-heading"><div><div class="eyebrow">SUPPORTED MARKETS</div><h3>Crypto catalogue</h3></div><span id="catalogue-count" class="muted">Loading assets…</span></div>
+      <div class="catalogue-tools"><input id="coin-search" placeholder="Search thousands of cryptocurrencies" autocomplete="off"><button id="load-more-coins" class="btn secondary" type="button">Load more</button></div>
+      <div id="catalogue-list" class="catalogue-list"></div>
+
+      <article class="panel security-panel"><div class="eyebrow">ACCOUNT SECURITY</div><h3>Security & sessions</h3><div class="security-actions"><button id="enable-mfa" class="btn secondary" type="button">Set up authenticator (2FA)</button><button id="signout-others" class="btn secondary" type="button">Sign out other sessions</button></div><div id="mfa-box" class="hidden"><p id="mfa-instructions" class="muted"></p><img id="mfa-qr" class="mfa-qr hidden" alt="Authenticator QR code"><label>Authenticator code<input id="mfa-code" inputmode="numeric" maxlength="6" placeholder="6-digit code"></label><button id="verify-mfa" class="btn primary" type="button">Verify and enable</button></div><div id="security-message" class="message"></div><div class="eyebrow login-history-label">RECENT SIGN-INS</div><div id="login-history" class="login-history muted">Loading sign-in history…</div></article>
+      <div class="section-title"><div><div class="eyebrow">LATEST ACTIVITY</div><h3>Recent transactions</h3></div><button class="text-button" data-goto="activity">View all →</button></div>
+      <div id="recent-list" class="transaction-list"><div class="empty-state">Loading your activity…</div></div>
+    </section>
+    <section id="withdraw-section" class="page-section hidden">
+      <div class="withdraw-hero"><div class="eyebrow">EXTERNAL PAYOUT REQUEST</div><h2>Withdraw to an external wallet</h2><p>Request a BTC, ETH or USDT payout to a wallet you control. Review the fee and network carefully before submitting.</p><div class="withdraw-assets"><span>₿ Bitcoin</span><span>◆ Ethereum</span><span>₮ Tether</span></div></div>
+      <div class="withdraw-layout"><article class="panel"><div class="eyebrow">NEW REQUEST</div><h3>Withdrawal details</h3>
+        <form id="withdraw-form">
+          <label>Asset to receive<select id="withdraw-asset" required><option value="BTC">BTC · Bitcoin</option><option value="ETH">ETH · Ethereum</option><option value="USDT">USDT · Tether</option></select></label>
+          <label>Amount in USD<input id="withdraw-usd" type="number" min="10" step="0.01" placeholder="10000.00" required></label>
+          <label>Destination wallet address<input id="withdraw-destination" required autocomplete="off" placeholder="Paste your external wallet address"></label>
+          <label>Receiving network<select id="withdraw-network" required></select></label>
+          <div class="withdraw-quote" id="withdraw-quote"><div><span>Requested payout</span><b>$—</b></div><div><span>Platform service fee (5%)</span><b>$—</b></div><div class="quote-total"><span>Customer payout</span><b>$—</b></div></div>
+          <p class="withdraw-disclosure">A 5% service fee is required to process withdrawals to an external wallet. Your withdrawal will proceed after the fee is verified and the request is approved.</p>
+          <button class="btn primary full" type="submit">Continue to fee payment ↗</button><div id="withdraw-message" class="message" role="status"></div>
+        </form>
+      </article>
+</div>
+      <article class="panel withdraw-history-panel"><div class="eyebrow">YOUR REQUESTS</div><h3>Withdrawal history</h3><div id="withdraw-history" class="withdraw-history">Loading requests…</div></article>
+    </section>
+    <section id="fee-payment-section" class="page-section hidden">
+      <div class="withdraw-hero"><div class="eyebrow">WITHDRAWAL · STEP 2</div><h2>Choose your fee payment method</h2><p>Your withdrawal request details are ready. Select how you want to pay the separate 5% platform service fee.</p></div>
+      <article class="panel fee-choice-panel">
+        <div class="eyebrow">PAYMENT METHOD</div><h3>Select cryptocurrency</h3>
+        <div class="fee-choice-grid">
+          <label class="fee-choice"><input type="radio" name="fee-choice" value="BTC" checked><span class="fee-choice-icon">₿</span><span><b>Bitcoin</b><small>BTC · Bitcoin network</small></span></label>
+          <label class="fee-choice"><input type="radio" name="fee-choice" value="ETH"><span class="fee-choice-icon">◆</span><span><b>Ethereum</b><small>ETH · Ethereum network</small></span></label>
+          <label class="fee-choice"><input type="radio" name="fee-choice" value="USDT"><span class="fee-choice-icon">₮</span><span><b>Tether</b><small>USDT · TRON (TRC-20)</small></span></label>
+        </div>
+        <div id="fee-step-summary" class="withdraw-quote"></div>
+        <div id="fee-step-message" class="message" role="status"></div>
+        <button id="create-fee-instructions" class="btn primary full" type="button">Continue to payment instructions ↗</button>
+        <button id="back-to-withdrawal" class="btn secondary full" type="button">Back to withdrawal details</button>
+      </article>
+      <article id="fee-instructions-panel" class="panel fee-instructions-panel hidden">
+        <div class="eyebrow">PAYMENT INSTRUCTIONS</div><h3>Pay your platform service fee</h3>
+        <div id="fee-payment-summary" class="withdraw-quote"></div>
+        <div id="fee-wallet-details"></div>
+        <p class="withdraw-disclosure">A 5% service fee is required to process withdrawals to an external wallet. Send only the selected cryptocurrency on the specified network. Your withdrawal will proceed after payment verification and approval.</p>
+        <div id="fee-qr-wrap" class="fee-qr-wrap"></div>
+        <button id="copy-fee-address" class="btn secondary full" type="button">Copy receiving address</button>
+        <button id="submit-fee-tx" class="btn primary full" type="button">I have paid · Submit transaction ID</button>
+        <div id="fee-instruction-message" class="message"></div>
+      </article>
+    </section>
+    <section id="activity-section" class="page-section hidden">
+      <div class="section-title"><div><div class="eyebrow">ACCOUNT HISTORY</div><h3>All transactions</h3></div><button class="btn secondary" id="refresh-activity">Refresh</button></div>
+      <div id="all-list" class="transaction-list"><div class="empty-state">Loading…</div></div>
+    </section>
+    <section id="admin-section" class="page-section hidden">
+      <div class="admin-stats" id="admin-stats"><div class="stat-card"><small>Members</small><b>—</b></div><div class="stat-card"><small>Transactions</small><b>—</b></div><div class="stat-card"><small>Suspended</small><b>—</b></div></div>
+      <div class="admin-grid">
+        <article class="panel"><div class="eyebrow">MEMBER SEARCH</div><h3>Find a member</h3><form id="lookup-form"><label>Username, email or wallet address<input id="lookup-username" placeholder="Search member" required minlength="2"></label><button class="btn secondary full" type="submit">Search members</button></form><div id="lookup-results" class="lookup-results"></div></article>
+        <article class="panel"><div class="eyebrow">ACCOUNT MANAGEMENT</div><h3>Adjust a balance</h3><form id="adjust-form"><label>Member user ID<input id="target-id" required placeholder="Select a member from search"></label><label>Asset<input id="adjust-asset" list="asset-options" value="BTC" required><datalist id="asset-options"></datalist></label><label>Adjustment amount<input id="adjust-amount" type="number" step="any" required placeholder="Use a negative amount to debit"></label><label>Reason<input id="adjust-reason" required maxlength="160" placeholder="Reason for this adjustment"></label><button class="btn primary full" type="submit">Apply adjustment</button></form><div id="adjust-message" class="message"></div></article>
+        <article class="panel fee-panel"><div class="eyebrow">TRANSFER SETTINGS</div><h3>Transfer fees</h3><p class="muted">Set the fee charged for each asset transfer.</p><form id="fee-form"><label>BTC transfer fee (BTC)<input id="fee-BTC" type="number" min="0" step="any" required></label><label>ETH transfer fee (ETH)<input id="fee-ETH" type="number" min="0" step="any" required></label><label>USDT transfer fee (ETH)<input id="fee-USDT" type="number" min="0" step="any" required></label><button class="btn primary full" type="submit">Save fee settings</button></form><div id="fee-message" class="message"></div></article>
+        <article class="panel"><div class="eyebrow">RISK CONTROLS</div><h3>Transfer limits</h3><form id="limit-form"><label>Asset<input id="limit-asset" list="asset-options" value="BTC" required></label><label>Minimum amount<input id="limit-min" type="number" min="0" step="any" value="0" required></label><label>Maximum amount<input id="limit-max" type="number" min="0" step="any" placeholder="Leave empty for no maximum"></label><button class="btn primary full" type="submit">Save transfer limits</button></form><div id="limit-message" class="message"></div></article>
+      </div>
+      <article class="panel withdrawal-admin-panel"><div class="eyebrow">PAYOUT OPERATIONS</div><h3>External withdrawal requests</h3><div id="admin-withdrawals" class="withdraw-history">Admin queue loads after database migration.</div></article>
+    </section>
+  </main>
+</div>
+
+<div id="send-modal" class="modal-backdrop hidden"><section class="modal"><button class="close-modal" data-close="send-modal">×</button><div class="eyebrow">TRANSFER</div><h2>Send a balance</h2><form id="send-form"><label>Recipient wallet address<input id="recipient" required placeholder="Enter wallet address" autocomplete="off"></label><label>Asset<select id="send-asset" required><option value="BTC">BTC · Bitcoin</option><option value="ETH">ETH · Ethereum</option><option value="USDT">USDT · Tether</option></select></label><label>Amount<input id="send-amount" type="number" min="0.00000001" step="any" required placeholder="0.00"></label><div id="fee-preview" class="fee-preview">Fee: loading…</div><button class="btn primary full" type="submit">Confirm transfer</button><div id="send-message" class="message"></div></form></section></div>
+
+<div id="receipt-modal" class="modal-backdrop hidden"><section class="modal receipt-modal"><div class="receipt-status"><span>✓</span></div><div class="eyebrow">TRANSACTION COMPLETE</div><h2>Transfer successful</h2><p class="receipt-subtitle">Your transfer has been completed.</p><div class="receipt-amount" id="receipt-amount">—</div><div class="receipt-usd" id="receipt-usd">—</div><div class="receipt-divider"></div><div class="receipt-details"><div><span>Asset price</span><b id="receipt-price">—</b></div><div><span>Crypto amount</span><b id="receipt-coin-amount">—</b></div><div><span>Recipient</span><b id="receipt-recipient">—</b></div><div><span>Transfer fee</span><b id="receipt-fee">—</b></div><div><span>Date & time</span><b id="receipt-date">—</b></div><div><span>Reference</span><b id="receipt-reference">—</b></div><div><span>Status</span><b class="receipt-success">Successful</b></div></div><button class="btn primary full" id="receipt-done" type="button">Done</button></section></div>
+<div id="password-reset-modal" class="modal-backdrop hidden"><section class="modal"><div class="eyebrow">ACCOUNT RECOVERY</div><h2>Set a new password</h2><form id="password-reset-form"><label>New password<input id="new-password" type="password" minlength="8" required autocomplete="new-password"></label><button class="btn primary full" type="submit">Update password</button><div id="password-reset-message" class="message"></div></form></section></div>
+<div id="toast" class="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js"></script>
+</body></html>
