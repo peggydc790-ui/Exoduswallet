@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b1020">
-<meta name="description" content="£xodus.wallet — an internal digital balance and transfer platform.">
+<meta name="description" content="£xodus.wallet">
 <title>£xodus.wallet</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -14,10 +14,8 @@
   <header class="topbar"><a class="brand" href="#"><span class="brand-icon">£</span><span> xodus<span class="violet">.</span>wallet</span></a><span class="secure-label">ACCOUNT ACCESS</span></header>
   <main class="auth-main">
     <section class="intro">
-      <div class="eyebrow"><span class="pulse"></span> YOUR ACCOUNT. YOUR LEDGER.</div>
-      <h1>Digital balances,<br><span>clearly managed.</span></h1>
-      <p>Access your account, view your BTC, ETH and USDT-denominated balances, and transfer internal balances to other registered members.</p>
-      <div class="intro-points"><span>✓ Personal balance overview</span><span>✓ Member-to-member transfers</span><span>✓ Clear transaction records</span></div>
+      <div class="eyebrow"><span class="pulse"></span> £XODUS.WALLET</div>
+      <h1>Your money.<br><span>Your space.</span></h1>
     </section>
     <section class="auth-card">
       <div class="brand-mark">£</div>
@@ -34,7 +32,7 @@
       <div class="switch-auth"><span id="switch-label">New to £xodus.wallet?</span> <button id="switch-auth" type="button">Create an account</button></div>
     </section>
   </main>
-  <footer class="auth-footer"><span>© 2026 £xodus.wallet</span><span>Internal platform balances · No external blockchain transfers</span></footer>
+  <footer class="auth-footer"><span>© 2026 £xodus.wallet</span></footer>
 </div>
 
 <div id="app-view" class="app-shell hidden">
@@ -49,32 +47,31 @@
   <main class="main-area">
     <header class="app-header"><div><div class="eyebrow">PERSONAL WORKSPACE</div><h1 id="page-title">Overview</h1></div><div class="header-right"><span class="status-pill"><i></i> Account active</span><div class="avatar" id="header-avatar">M</div></div></header>
     <section id="overview-section" class="page-section">
-      <div class="notice"><b>Important:</b> These are internal platform balances denominated in BTC, ETH and USDT. They are not on-chain cryptocurrency and cannot be deposited to or withdrawn from external wallets.</div>
-      <div class="welcome-row"><div><div class="eyebrow">YOUR ACCOUNT</div><h2>Welcome back, <span id="welcome-name">Member</span>.</h2><p class="muted">Your internal balance overview.</p></div><button class="btn primary" id="open-send">Send balance <span>↗</span></button></div>
+      <div class="welcome-row"><div><div class="eyebrow">YOUR ACCOUNT</div><h2>Welcome back, <span id="welcome-name">Member</span>.</h2><p class="muted">Your balances at a glance.</p></div><button class="btn primary" id="open-send">Send balance <span>↗</span></button></div>
+      <article class="wallet-address-card"><div><div class="eyebrow">WALLET ADDRESS</div><div id="wallet-address" class="wallet-address-value">Loading…</div></div><button class="btn secondary" id="copy-wallet-address" type="button">Copy</button></article>
       <div class="asset-grid">
-        <article class="asset-card"><div class="asset-head"><span class="coin btc">₿</span><span class="asset-code">BTC</span></div><div class="asset-name">Bitcoin-denominated balance</div><div class="asset-balance" id="balance-BTC">— BTC</div><div class="asset-foot">Internal ledger balance</div></article>
-        <article class="asset-card"><div class="asset-head"><span class="coin eth">◆</span><span class="asset-code">ETH</span></div><div class="asset-name">Ethereum-denominated balance</div><div class="asset-balance" id="balance-ETH">— ETH</div><div class="asset-foot">Internal ledger balance</div></article>
-        <article class="asset-card"><div class="asset-head"><span class="coin usdt">₮</span><span class="asset-code">USDT</span></div><div class="asset-name">Tether-denominated balance</div><div class="asset-balance" id="balance-USDT">— USDT</div><div class="asset-foot">Internal ledger balance</div></article>
+        <article class="asset-card"><div class="asset-head"><span class="coin btc">₿</span><span class="asset-code">BTC</span></div><div class="asset-balance" id="balance-BTC">— BTC</div></article>
+        <article class="asset-card"><div class="asset-head"><span class="coin eth">◆</span><span class="asset-code">ETH</span></div><div class="asset-balance" id="balance-ETH">— ETH</div></article>
+        <article class="asset-card"><div class="asset-head"><span class="coin usdt">₮</span><span class="asset-code">USDT</span></div><div class="asset-balance" id="balance-USDT">— USDT</div></article>
       </div>
       <div class="section-title"><div><div class="eyebrow">LATEST ACTIVITY</div><h3>Recent transactions</h3></div><button class="text-button" data-goto="activity">View all →</button></div>
       <div id="recent-list" class="transaction-list"><div class="empty-state">Loading your activity…</div></div>
     </section>
     <section id="activity-section" class="page-section hidden">
-      <div class="notice"><b>Transaction records:</b> Activity shown here reflects internal ledger movements only, not blockchain transactions.</div>
       <div class="section-title"><div><div class="eyebrow">ACCOUNT HISTORY</div><h3>All transactions</h3></div><button class="btn secondary" id="refresh-activity">Refresh</button></div>
       <div id="all-list" class="transaction-list"><div class="empty-state">Loading…</div></div>
     </section>
     <section id="admin-section" class="page-section hidden">
-      <div class="notice admin-notice"><b>Administrator controls.</b> Every balance adjustment is recorded in the account ledger. Only authorised administrator accounts can use these controls.</div>
       <div class="admin-grid">
         <article class="panel"><div class="eyebrow">MEMBER SEARCH</div><h3>Find a member</h3><form id="lookup-form"><label>Username<input id="lookup-username" placeholder="Enter username" required minlength="2"></label><button class="btn secondary full" type="submit">Search members</button></form><div id="lookup-results" class="lookup-results"></div></article>
-        <article class="panel"><div class="eyebrow">LEDGER CONTROL</div><h3>Adjust a balance</h3><form id="adjust-form"><label>Member user ID<input id="target-id" required placeholder="Select a member from search"></label><label>Asset<select id="adjust-asset"><option>BTC</option><option>ETH</option><option>USDT</option></select></label><label>Adjustment amount<input id="adjust-amount" type="number" step="any" required placeholder="Use a negative amount to debit"></label><label>Reason<input id="adjust-reason" required maxlength="160" placeholder="Reason for this adjustment"></label><button class="btn primary full" type="submit">Apply adjustment</button></form><div id="adjust-message" class="message"></div></article>
+        <article class="panel"><div class="eyebrow">ACCOUNT MANAGEMENT</div><h3>Adjust a balance</h3><form id="adjust-form"><label>Member user ID<input id="target-id" required placeholder="Select a member from search"></label><label>Asset<select id="adjust-asset"><option>BTC</option><option>ETH</option><option>USDT</option></select></label><label>Adjustment amount<input id="adjust-amount" type="number" step="any" required placeholder="Use a negative amount to debit"></label><label>Reason<input id="adjust-reason" required maxlength="160" placeholder="Reason for this adjustment"></label><button class="btn primary full" type="submit">Apply adjustment</button></form><div id="adjust-message" class="message"></div></article>
+        <article class="panel fee-panel"><div class="eyebrow">TRANSFER SETTINGS</div><h3>Transfer fees</h3><p class="muted">Set the fee charged for each asset transfer.</p><form id="fee-form"><label>BTC transfer fee (BTC)<input id="fee-BTC" type="number" min="0" step="any" required></label><label>ETH transfer fee (ETH)<input id="fee-ETH" type="number" min="0" step="any" required></label><label>USDT transfer fee (ETH)<input id="fee-USDT" type="number" min="0" step="any" required></label><button class="btn primary full" type="submit">Save fee settings</button></form><div id="fee-message" class="message"></div></article>
       </div>
     </section>
   </main>
 </div>
 
-<div id="send-modal" class="modal-backdrop hidden"><section class="modal"><button class="close-modal" data-close="send-modal">×</button><div class="eyebrow">INTERNAL TRANSFER</div><h2>Send a balance</h2><p class="muted">Transfer to another registered £xodus.wallet username.</p><form id="send-form"><label>Recipient username<input id="recipient" required placeholder="e.g. member_name"></label><label>Asset<select id="send-asset"><option>BTC</option><option>ETH</option><option>USDT</option></select></label><label>Amount<input id="send-amount" type="number" min="0.00000001" step="any" required placeholder="0.00"></label><button class="btn primary full" type="submit">Confirm internal transfer</button><div id="send-message" class="message"></div></form><div class="modal-disclaimer">Transfers only update internal platform balances. No blockchain transaction is created.</div></section></div>
+<div id="send-modal" class="modal-backdrop hidden"><section class="modal"><button class="close-modal" data-close="send-modal">×</button><div class="eyebrow">TRANSFER</div><h2>Send a balance</h2><form id="send-form"><label>Recipient wallet address<input id="recipient" required placeholder="Enter wallet address" autocomplete="off"></label><label>Asset<select id="send-asset"><option>BTC</option><option>ETH</option><option>USDT</option></select></label><label>Amount<input id="send-amount" type="number" min="0.00000001" step="any" required placeholder="0.00"></label><div id="fee-preview" class="fee-preview">Fee: loading…</div><button class="btn primary full" type="submit">Confirm transfer</button><div id="send-message" class="message"></div></form></section></div>
 <div id="toast" class="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js"></script>
 </body></html>

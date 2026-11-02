@@ -1,9 +1,9 @@
-// £xodus.wallet — internal ledger frontend. Public Supabase publishable key is intended for browser use.
+// £xodus.wallet. Public Supabase publishable key is intended for browser use.
 const SUPABASE_URL = "https://wbdydlyrcoinqmoejqhd.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_t6LzKQt77Wom4Uhl8PmdFw_JFfsiNCZ";
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = (id) => document.getElementById(id);
-let currentUser = null, currentProfile = null, authMode = "login";
+let currentUser = null, currentProfile = null, authMode = "login", feeSettings = {};
 const ASSETS = ["BTC","ETH","USDT"];
 
 function showMessage(id, text, bad=false) { const el=$(id); el.textContent=text; el.className="message"+(bad?" error":""); }
@@ -40,15 +40,16 @@ async function boot(){
   const {data:{user},error}=await db.auth.getUser();
   if(error||!user){showAuth();return;}
   currentUser=user;
-  const {data:profile,error:profileError}=await db.from("profiles").select("id,username,role,created_at").eq("id",user.id).single();
+  const {data:profile,error:profileError}=await db.from("profiles").select("id,username,wallet_address,role,created_at").eq("id",user.id).single();
   if(profileError) throw profileError;
   currentProfile=profile;
+  $("wallet-address").textContent=profile.wallet_address||"—";
   $("auth-view").classList.add("hidden"); $("app-view").classList.remove("hidden");
   const username=profile.username||"Member", initial=username.slice(0,1).toUpperCase();
   $("welcome-name").textContent=username; $("side-username").textContent=username; $("side-email").textContent=user.email||"";
   $("avatar").textContent=initial; $("header-avatar").textContent=initial;
   $("admin-nav").classList.toggle("hidden",profile.role!=="admin");
-  await loadBalances(); await loadTransactions();
+  await loadBalances(); await loadTransactions(); await loadFeeSettings();
 }
 function showAuth(){currentUser=null;currentProfile=null;$("app-view").classList.add("hidden");$("auth-view").classList.remove("hidden");}
 async function loadBalances(){
@@ -56,13 +57,35 @@ async function loadBalances(){
   if(error) throw error;
   for(const asset of ASSETS){const row=(data||[]).find(x=>x.asset===asset);$("balance-"+asset).textContent=`${fmt(row?.balance)} ${asset}`;}
 }
+async function loadFeeSettings(){
+  const {data,error}=await db.from("wallet_fee_settings").select("transfer_asset,fee_asset,fee_amount");
+  if(error) throw error;
+  feeSettings=Object.fromEntries((data||[]).map(row=>[row.transfer_asset,{asset:row.fee_asset,amount:Number(row.fee_amount)}]));
+  for(const asset of ASSETS){const input=$("fee-"+asset);if(input)input.value=feeSettings[asset]?.amount??0;}
+  updateFeePreview();
+}
+function updateFeePreview(){
+  const asset=$("send-asset")?.value||"BTC", fee=feeSettings[asset];
+  if($("fee-preview"))$("fee-preview").textContent=fee?`Transfer fee: ${fmt(fee.amount)} ${fee.asset}`:"Transfer fee: unavailable";
+}
+$("send-asset").addEventListener("change",updateFeePreview);
+$("send-amount").addEventListener("input",updateFeePreview);
+$("fee-form").addEventListener("submit",async e=>{
+  e.preventDefault();const btn=e.submitter;btn.disabled=true;showMessage("fee-message","Saving fees…");
+  try{
+    for(const asset of ASSETS){const amount=Number($("fee-"+asset).value);if(!Number.isFinite(amount)||amount<0)throw new Error("Enter a valid non-negative fee for each asset.");
+      const {error}=await db.rpc("admin_update_fee",{transfer_asset:asset,fee_amount:amount});if(error)throw error;}
+    await loadFeeSettings();showMessage("fee-message","Fee settings saved.");
+  }catch(err){showMessage("fee-message",err.message||"Unable to save fees.",true);}finally{btn.disabled=false;}
+});
+
 function transactionRow(tx){
   const sent=tx.sender_id===currentUser.id;
-  const label=tx.transaction_type==="admin_credit"?"Administrator credit":tx.transaction_type==="admin_debit"?"Administrator debit":sent?"Sent to member":"Received from member";
+  const label=tx.transaction_type==="admin_credit"?"Administrator credit":tx.transaction_type==="admin_debit"?"Administrator debit":sent?"Sent":"Received";
   const sign=tx.transaction_type==="admin_credit"||(!sent&&tx.transaction_type==="transfer")?"+":"−";
   const amountClass=sign==="+"?"positive":"negative";
   const when=new Date(tx.created_at).toLocaleString();
-  return `<div class="tx-row"><div class="tx-icon ${amountClass}">${sign==="+"?"↓":"↑"}</div><div class="tx-info"><b>${label}</b><small>${escapeHtml(tx.description||"Internal ledger transfer")} · ${when}</small></div><div class="tx-amount ${amountClass}">${sign}${fmt(tx.amount)} ${tx.asset}</div></div>`;
+  return `<div class="tx-row"><div class="tx-icon ${amountClass}">${sign==="+"?"↓":"↑"}</div><div class="tx-info"><b>${label}</b><small>${escapeHtml(tx.description||"Transfer")} · ${when}</small></div><div class="tx-amount ${amountClass}">${sign}${fmt(tx.amount)} ${tx.asset}</div></div>`;
 }
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function loadTransactions(){
@@ -72,13 +95,19 @@ async function loadTransactions(){
   $("recent-list").innerHTML=(data||[]).slice(0,5).map(transactionRow).join("")||'<div class="empty-state">No transactions yet.</div>';
   $("all-list").innerHTML=html;
 }
-$("open-send").addEventListener("click",()=>{$("send-modal").classList.remove("hidden");showMessage("send-message","");});
+$("open-send").addEventListener("click",()=>{$("send-modal").classList.remove("hidden");showMessage("send-message","");updateFeePreview();});
+$("copy-wallet-address").addEventListener("click",async()=>{
+  const address=$("wallet-address").textContent;
+  if(!address||address==="—"||address==="Loading…") return;
+  try{await navigator.clipboard.writeText(address);toast("Wallet address copied.");}
+  catch{toast("Unable to copy wallet address.");}
+});
 document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>$ (b.dataset.close).classList.add("hidden")));
 $("send-modal").addEventListener("click",e=>{if(e.target===$("send-modal"))$("send-modal").classList.add("hidden");});
 $("send-form").addEventListener("submit",async e=>{
  e.preventDefault();const btn=e.submitter;btn.disabled=true;showMessage("send-message","Processing transfer…");
  try{
-  const {data,error}=await db.rpc("transfer_balance",{recipient_username:$("recipient").value.trim(),asset_code:$("send-asset").value,transfer_amount:Number($("send-amount").value)});
+  const {data,error}=await db.rpc("transfer_balance",{recipient_wallet_address:$("recipient").value.trim(),asset_code:$("send-asset").value,transfer_amount:Number($("send-amount").value)});
   if(error)throw error;
   showMessage("send-message","Transfer completed. Reference: "+data);
   $("send-form").reset();await loadBalances();await loadTransactions();
