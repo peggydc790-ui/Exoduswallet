@@ -105,37 +105,55 @@ $("copy-wallet-address").addEventListener("click",async()=>{
 });
 document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>$ (b.dataset.close).classList.add("hidden")));
 $("send-modal").addEventListener("click",e=>{if(e.target===$("send-modal"))$("send-modal").classList.add("hidden");});
-async function fetchCoinbaseSpot(asset){
- const supported={BTC:"BTC-USD",ETH:"ETH-USD",USDT:"USDT-USD"};
- const pair=supported[asset];if(!pair)throw new Error("No Coinbase spot pair for this asset.");
- const response=await fetch(`https://api.coinbase.com/v2/prices/${pair}/spot`,{cache:"no-store",credentials:"omit"});
- if(!response.ok)throw new Error(`Coinbase price request failed (${response.status}).`);
- const data=await response.json(),price=Number(data?.data?.amount);
- if(!Number.isFinite(price)||price<=0)throw new Error("Coinbase returned an invalid price.");
- return price;
+// Market pricing: bounded requests, short-lived cache, and independent fallbacks.
+// Binance public market-data endpoint is the primary source for liquid USDT pairs.
+const PRICE_CACHE = new Map();
+const PRICE_CACHE_TTL = 45_000;
+const PRICE_TIMEOUT_MS = 7_000;
+function fetchJsonWithTimeout(url, options={}) {
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),PRICE_TIMEOUT_MS);
+ return fetch(url,{...options,signal:controller.signal,cache:"no-store",credentials:"omit"})
+  .then(async response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();})
+  .finally(()=>clearTimeout(timer));
 }
-async function fetchCoinGeckoSpot(asset){
- const ids={BTC:"bitcoin",ETH:"ethereum",USDT:"tether",...Object.fromEntries(Object.entries(assetMeta).map(([k,v])=>[k,v.id]))};
- const id=ids[asset];if(!id)throw new Error(`No market-data mapping is configured for ${asset}.`);
- const response=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd`,{cache:"no-store",credentials:"omit"});
- if(!response.ok)throw new Error(`CoinGecko price request failed (${response.status}).`);
- const data=await response.json(),price=Number(data?.[id]?.usd);
- if(!Number.isFinite(price)||price<=0)throw new Error("CoinGecko returned an invalid price.");
+async function fetchBinanceSpot(asset){
+ // Binance market-data-only host; prices are quoted in USDT (approximately USD).
+ const symbol=asset+"USDT";
+ const data=await fetchJsonWithTimeout(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`);
+ const price=Number(data?.price);
+ if(!Number.isFinite(price)||price<=0)throw new Error("Binance returned no usable price.");
  return price;
 }
 async function fetchCoinMarketCapSpot(asset){
- const response=await fetch(`https://pro-api.coinmarketcap.com/public-api/v2/simple/price?symbol=${encodeURIComponent(asset)}&convert=USD`,{cache:"no-store",credentials:"omit",headers:{Accept:"application/json"}});
- if(!response.ok)throw new Error(`CoinMarketCap price request failed (${response.status}).`);
- const data=await response.json(),items=data?.data?.[asset];
+ const data=await fetchJsonWithTimeout(`https://pro-api.coinmarketcap.com/public-api/v2/simple/price?symbol=${encodeURIComponent(asset)}&convert=USD`,{headers:{Accept:"application/json"}});
+ const items=data?.data?.[asset];
  const price=Number(Array.isArray(items)?items[0]?.quotes?.[0]?.price:items?.quotes?.[0]?.price);
- if(!Number.isFinite(price)||price<=0)throw new Error("CoinMarketCap returned an invalid price.");
+ if(!Number.isFinite(price)||price<=0)throw new Error("CoinMarketCap returned no usable price.");
+ return price;
+}
+async function fetchCoinGeckoSpot(asset){
+ const ids={BTC:"bitcoin",ETH:"ethereum",USDT:"tether",...Object.fromEntries(Object.entries(assetMeta).map(([k,v])=>[k,v.id]).filter(([,id])=>!!id))};
+ const id=ids[asset];if(!id)throw new Error(`No market-data mapping is configured for ${asset}.`);
+ const data=await fetchJsonWithTimeout(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd`,{headers:{accept:"application/json"}});
+ const price=Number(data?.[id]?.usd);
+ if(!Number.isFinite(price)||price<=0)throw new Error("CoinGecko returned no usable price.");
  return price;
 }
 async function getLivePrice(asset){
- const providers=asset==="BTC"||asset==="ETH"||asset==="USDT"?[fetchCoinbaseSpot,fetchCoinGeckoSpot,fetchCoinMarketCapSpot]:[fetchCoinGeckoSpot,fetchCoinMarketCapSpot];
- const failures=[];
- for(const provider of providers){try{return await provider(asset);}catch(err){failures.push(err.message||"Price provider unavailable.");}}
- throw new Error(`Live ${asset} pricing is temporarily unavailable. ${failures.join(" · ")}`);
+ const cached=PRICE_CACHE.get(asset);
+ if(cached&&Date.now()-cached.time<PRICE_CACHE_TTL)return cached.price;
+ const providers=asset==="BTC"||asset==="ETH"?[fetchBinanceSpot,fetchCoinMarketCapSpot,fetchCoinGeckoSpot]:asset==="USDT"?[fetchCoinMarketCapSpot,fetchCoinGeckoSpot]:[fetchCoinMarketCapSpot,fetchCoinGeckoSpot];
+ const attempts=providers.map(provider=>provider(asset).then(price=>{
+  if(!Number.isFinite(price)||price<=0)throw new Error("invalid price");
+  PRICE_CACHE.set(asset,{price,time:Date.now()});return price;
+ }));
+ try{return await Promise.any(attempts);}
+ catch(err){
+  const reasons=(err?.errors||[]).map(e=>e?.name==="AbortError"?"provider timed out":(e?.message||"provider unavailable"));
+  // Do not leave a screen spinning forever; surface a clear error after bounded attempts.
+  throw new Error(`Live ${asset} rate is unavailable right now. ${reasons.join(" · ")}`);
+ }
 }
 
 function showReceipt(tx,recipient){
@@ -340,7 +358,7 @@ async function loadPortfolio(){
  }).join("");
  const hasUnpriced=priceResults.some(([asset,price])=>!Number.isFinite(Number(price))||Number(price)<=0);
  $("portfolio-total").textContent=pricedCount?`$${total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`:"Price unavailable";
- $("portfolio-change").textContent=hasUnpriced?"Some asset prices are temporarily unavailable":"Live portfolio valuation";
+ $("portfolio-change").textContent=hasUnpriced?"Some market rates are unavailable; retry shortly":"Live market rates";
  $("portfolio-updated").textContent=`Updated ${new Date().toLocaleTimeString()}`;
  $("portfolio-breakdown").innerHTML=lines;
 }
