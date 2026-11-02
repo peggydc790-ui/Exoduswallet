@@ -1,39 +1,22 @@
-# £xodus.wallet — starter project
+# £xodus.wallet — internal ledger frontend
 
-This is the first frontend foundation for the public landing page and authentication entry point.
+This frontend connects to the existing Supabase project and its `profiles`, `wallet_balances`, and `wallet_transactions` tables.
 
-## Important product boundary
-This project is a **demo wallet simulator**. Balances and transfers must be clearly labelled simulated. It does not custody cryptocurrency, create real blockchain balances, or process real withdrawals. Do not ask users to send crypto to unlock demo balances or withdrawals.
+## Product disclosure
+BTC, ETH and USDT balances are internal platform-maintained ledger units denominated in those assets. They are not on-chain cryptocurrency, are not held in external blockchain wallets, and cannot be deposited from or withdrawn to external wallets. Internal transfers update the platform ledger only.
 
-## Files
-- `index.html` — responsive public landing page and login/register modal
-- `styles.css` — visual system and responsive layout
-- `app.js` — Supabase Auth connection (requires your project credentials)
-- `supabase/schema.sql` — starter database schema for demo accounts and wallets
+## Deployment
+The current Cloudflare Worker deployment is configured to serve static assets from the repository root. Replace `index.html`, `app.js`, and `styles.css` in the GitHub repository, commit to `main`, and Cloudflare should redeploy from the connected repository. Keep `wrangler.jsonc` and other Cloudflare-generated files.
 
-## 1. Create the Supabase project
-1. Open https://supabase.com and create a new project.
-2. In Project Settings → API, copy the Project URL and anon/public key.
-3. Open `app.js` and replace `YOUR_SUPABASE_PROJECT_URL` and `YOUR_SUPABASE_ANON_KEY`.
-4. In Supabase SQL Editor, run `supabase/schema.sql`.
+## Supabase
+The browser uses the public publishable key. Database access is protected by RLS and server-side RPC validation. Do not add a Supabase service-role key to frontend code.
 
-The anon key is designed for browser use. Never place a Supabase service-role key or database password in frontend files.
+The app expects:
+- `profiles(id, username, role, created_at)`
+- `wallet_balances(user_id, asset, balance)`
+- `wallet_transactions(sender_id, receiver_id, asset, amount, transaction_type, description, created_at)`
+- RPC `transfer_balance(recipient_username, asset_code, transfer_amount)`
+- RPC `admin_adjust_balance(target_user, asset_code, adjustment, reason)`
+- RPC `admin_find_user(search_username)` (admin-only; migration added to the connected Supabase project)
 
-## 2. Publish on Cloudflare Pages
-1. Create a GitHub repository named `exodus-wallet`.
-2. Upload the contents of this ZIP to the repository root (not the ZIP file itself).
-3. In Cloudflare, open Workers & Pages → Create → Pages → Connect to Git.
-4. Select the `exodus-wallet` repository.
-5. Framework preset: None. Build command: leave blank. Build output directory: `/` (or `.` if the dashboard requires it).
-6. Deploy. Cloudflare Pages will publish `index.html`.
-
-## 3. Before enabling public registration
-- Configure Supabase email confirmation and allowed redirect URLs for your deployed domain.
-- Add rate limits / abuse protection.
-- Build the authenticated dashboard and server-side transfer function before storing or changing balances.
-- Use database constraints and atomic transactions for all transfers. Never allow users to update balances directly from the browser.
-- Add clear demo labels throughout the product.
-
-## Current status
-Stage 1: landing page and authentication interface.
-Next: connect Supabase, test registration/login, then build the protected dashboard and secure demo transfer engine.
+New signups create profiles and zero balances through the existing auth trigger. The initial administrator must be promoted manually in Supabase after registering; never allow users to set their own role.

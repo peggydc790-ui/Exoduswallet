@@ -1,68 +1,80 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#090b18">
-  <meta name="description" content="£xodus.wallet — a transparent digital wallet simulator.">
-  <title>£xodus.wallet — Digital finance, clearly.</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<meta name="description" content="£xodus.wallet — an internal digital balance and transfer platform.">
+<title>£xodus.wallet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="nav wrap">
-    <a class="brand" href="#" aria-label="£xodus.wallet home"><span class="brand-mark">£</span><span>xodus<span class="brand-dot">.</span>wallet</span></a>
-    <nav><a href="#features">Features</a><a href="#how">How it works</a><a href="#about">About</a></nav>
-    <div class="nav-actions"><button class="btn btn-quiet" data-open="login">Log in</button><button class="btn btn-primary" data-open="signup">Create account <span>↗</span></button></div>
-    <button class="menu-toggle" aria-label="Open menu">☰</button>
-  </header>
-
-  <main>
-    <section class="hero wrap">
-      <div class="hero-copy">
-        <div class="eyebrow"><i></i> A clearer way to manage your digital portfolio</div>
-        <h1>Your digital assets.<br><span>One clear view.</span></h1>
-        <p class="hero-lead">A modern, easy-to-use wallet simulator for exploring digital asset balances, organising wallets and practising transfers.</p>
-        <div class="hero-actions"><button class="btn btn-primary btn-large" data-open="signup">Get started <span>↗</span></button><a class="text-link" href="#features">Explore the platform <span>→</span></a></div>
-        <div class="hero-note"><span class="avatar-stack"><b>£</b><b>₿</b><b>Ξ</b></span><span>Built for clarity, control and learning.</span></div>
-      </div>
-      <div class="visual">
-        <div class="glow"></div>
-        <div class="dashboard-card">
-          <div class="card-top"><div><small>PORTFOLIO PREVIEW</small><strong>Overview</strong></div><span class="live-tag">DEMO</span></div>
-          <div class="balance-label">Demo portfolio value</div><div class="balance">$24,680<span>.50</span></div>
-          <div class="chart"><div class="chart-grid"></div><svg viewBox="0 0 520 150" preserveAspectRatio="none" aria-label="Illustrative portfolio chart"><defs><linearGradient id="area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8b75ff" stop-opacity=".35"/><stop offset="1" stop-color="#8b75ff" stop-opacity="0"/></linearGradient></defs><path d="M0 119 C28 110 34 122 62 99 S105 111 132 82 S176 100 204 74 S245 89 270 62 S312 79 340 52 S380 69 405 43 S449 54 472 24 S500 35 520 12 L520 150 L0 150Z" fill="url(#area)"/><path d="M0 119 C28 110 34 122 62 99 S105 111 132 82 S176 100 204 74 S245 89 270 62 S312 79 340 52 S380 69 405 43 S449 54 472 24 S500 35 520 12" fill="none" stroke="#a89aff" stroke-width="3"/></svg></div>
-          <div class="chart-labels"><span>1W</span><span>1M</span><span>3M</span><span>6M</span><span>1Y</span><span>ALL</span></div>
-          <div class="asset-row"><div class="coin btc">₿</div><div class="asset-name"><b>Bitcoin</b><small>BTC · Demo asset</small></div><div class="asset-value"><b>$12,420.00</b><small>Illustrative</small></div></div>
-          <div class="asset-row"><div class="coin eth">◆</div><div class="asset-name"><b>Ethereum</b><small>ETH · Demo asset</small></div><div class="asset-value"><b>$8,160.50</b><small>Illustrative</small></div></div>
-          <div class="asset-row"><div class="coin usdt">₮</div><div class="asset-name"><b>USD Coin</b><small>USDC · Demo asset</small></div><div class="asset-value"><b>$4,100.00</b><small>Illustrative</small></div></div>
-        </div>
-        <div class="float-chip chip-one"><span>↗</span><div><b>Wallet transfers</b><small>Practice securely</small></div></div>
-        <div class="float-chip chip-two"><span class="shield">✓</span><div><b>Account access</b><small>Personal dashboard</small></div></div>
-      </div>
+<div id="auth-view" class="auth-shell">
+  <header class="topbar"><a class="brand" href="#"><span class="brand-icon">£</span><span> xodus<span class="violet">.</span>wallet</span></a><span class="secure-label">ACCOUNT ACCESS</span></header>
+  <main class="auth-main">
+    <section class="intro">
+      <div class="eyebrow"><span class="pulse"></span> YOUR ACCOUNT. YOUR LEDGER.</div>
+      <h1>Digital balances,<br><span>clearly managed.</span></h1>
+      <p>Access your account, view your BTC, ETH and USDT-denominated balances, and transfer internal balances to other registered members.</p>
+      <div class="intro-points"><span>✓ Personal balance overview</span><span>✓ Member-to-member transfers</span><span>✓ Clear transaction records</span></div>
     </section>
-
-    <section class="trust wrap"><span>DESIGNED FOR SIMPLE DIGITAL-ASSET PRACTICE</span><div><b>WALLETS</b><b>PORTFOLIO</b><b>TRANSFERS</b><b>INSIGHTS</b></div></section>
-
-    <section class="features section wrap" id="features">
-      <div class="section-heading"><div class="eyebrow">THE EXPERIENCE</div><h2>Everything organised.<br><span>Nothing complicated.</span></h2><p>Explore the core tools in one thoughtfully designed place.</p></div>
-      <div class="feature-grid">
-        <article class="feature"><div class="feature-icon">▦</div><h3>One portfolio view</h3><p>See your simulated asset balances together in a clear, organised dashboard.</p></article>
-        <article class="feature"><div class="feature-icon">⇄</div><h3>Internal transfers</h3><p>Practise moving demo balances between wallets and registered demo accounts.</p></article>
-        <article class="feature"><div class="feature-icon">⌁</div><h3>Activity history</h3><p>Review clearly labelled demo activity with references and transfer details.</p></article>
-        <article class="feature"><div class="feature-icon">⚙</div><h3>Wallet management</h3><p>Organise multiple simulated wallets from one account.</p></article>
-      </div>
+    <section class="auth-card">
+      <div class="brand-mark">£</div>
+      <div class="eyebrow">WELCOME TO £XODUS.WALLET</div>
+      <h2 id="auth-title">Sign in to your account</h2>
+      <p id="auth-subtitle" class="muted">Enter your details to continue.</p>
+      <form id="auth-form">
+        <label id="username-wrap" class="hidden">Username<input id="username" minlength="3" maxlength="24" autocomplete="username" placeholder="Choose a username"></label>
+        <label>Email address<input id="email" type="email" required autocomplete="email" placeholder="name@example.com"></label>
+        <label>Password<input id="password" type="password" required minlength="8" autocomplete="current-password" placeholder="At least 8 characters"></label>
+        <button id="auth-submit" class="btn primary full" type="submit">Sign in <span>↗</span></button>
+        <div id="auth-message" class="message" role="status"></div>
+      </form>
+      <div class="switch-auth"><span id="switch-label">New to £xodus.wallet?</span> <button id="switch-auth" type="button">Create an account</button></div>
     </section>
-
-    <section class="how section" id="how"><div class="wrap how-inner"><div><div class="eyebrow">GET STARTED</div><h2>A simpler way<br>to get familiar.</h2><p>Create an account, explore your dashboard and practise wallet-to-wallet transfers in a clearly labelled demo environment.</p><button class="btn btn-primary" data-open="signup">Create your account ↗</button></div><div class="steps"><div><b>01</b><span><strong>Create an account</strong><small>Register with your email address.</small></span></div><div><b>02</b><span><strong>Explore your dashboard</strong><small>See demo assets and wallet tools.</small></span></div><div><b>03</b><span><strong>Practise transfers</strong><small>Move demo balances between accounts.</small></span></div></div></div></section>
-    <section class="about wrap section" id="about"><div class="eyebrow">ABOUT £XODUS.WALLET</div><h2>Digital finance, <span>made clearer.</span></h2><p>£xodus.wallet is a digital wallet simulation environment. It is designed for demonstration and learning; balances are not real cryptocurrency and cannot be withdrawn or exchanged for cash.</p></section>
   </main>
-  <footer class="footer"><div class="wrap footer-inner"><a class="brand" href="#"><span class="brand-mark">£</span><span>xodus<span class="brand-dot">.</span>wallet</span></a><span>© 2026 £xodus.wallet · Demo environment</span><span>Simulated balances only · No real crypto custody</span></div></footer>
+  <footer class="auth-footer"><span>© 2026 £xodus.wallet</span><span>Internal platform balances · No external blockchain transfers</span></footer>
+</div>
 
-  <div class="modal-backdrop" id="auth-modal" aria-hidden="true"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="modal-close" aria-label="Close">×</button><div class="brand modal-brand"><span class="brand-mark">£</span><span>xodus<span class="brand-dot">.</span>wallet</span></div><div class="eyebrow">WELCOME</div><h2 id="modal-title">Create your account</h2><p id="modal-desc">Start with a free demo account.</p><form id="auth-form"><label>Email address<input type="email" id="email" placeholder="you@example.com" required autocomplete="email"></label><label>Password<input type="password" id="password" placeholder="At least 8 characters" required minlength="8" autocomplete="new-password"></label><button class="btn btn-primary submit-btn" type="submit">Create account ↗</button><p class="form-message" id="form-message" role="status"></p></form><div class="modal-switch"><span id="switch-text">Already registered?</span> <button id="switch-mode">Log in</button></div><small class="legal-note">Demo platform only. Do not deposit cryptocurrency or send funds.</small></section></div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js"></script>
-</body>
-</html>
+<div id="app-view" class="app-shell hidden">
+  <aside class="sidebar">
+    <a class="brand" href="#"><span class="brand-icon">£</span><span> xodus<span class="violet">.</span>wallet</span></a>
+    <div class="side-label">WORKSPACE</div>
+    <button class="side-link active" data-section="overview"><span>◫</span> Overview</button>
+    <button class="side-link" data-section="activity"><span>↔</span> Transactions</button>
+    <button class="side-link hidden" id="admin-nav" data-section="admin"><span>⚙</span> Administration</button>
+    <div class="sidebar-bottom"><div class="account-mini"><div class="avatar" id="avatar">M</div><div><b id="side-username">Member</b><small id="side-email"></small></div></div><button id="logout" class="logout">↪ Sign out</button></div>
+  </aside>
+  <main class="main-area">
+    <header class="app-header"><div><div class="eyebrow">PERSONAL WORKSPACE</div><h1 id="page-title">Overview</h1></div><div class="header-right"><span class="status-pill"><i></i> Account active</span><div class="avatar" id="header-avatar">M</div></div></header>
+    <section id="overview-section" class="page-section">
+      <div class="notice"><b>Important:</b> These are internal platform balances denominated in BTC, ETH and USDT. They are not on-chain cryptocurrency and cannot be deposited to or withdrawn from external wallets.</div>
+      <div class="welcome-row"><div><div class="eyebrow">YOUR ACCOUNT</div><h2>Welcome back, <span id="welcome-name">Member</span>.</h2><p class="muted">Your internal balance overview.</p></div><button class="btn primary" id="open-send">Send balance <span>↗</span></button></div>
+      <div class="asset-grid">
+        <article class="asset-card"><div class="asset-head"><span class="coin btc">₿</span><span class="asset-code">BTC</span></div><div class="asset-name">Bitcoin-denominated balance</div><div class="asset-balance" id="balance-BTC">— BTC</div><div class="asset-foot">Internal ledger balance</div></article>
+        <article class="asset-card"><div class="asset-head"><span class="coin eth">◆</span><span class="asset-code">ETH</span></div><div class="asset-name">Ethereum-denominated balance</div><div class="asset-balance" id="balance-ETH">— ETH</div><div class="asset-foot">Internal ledger balance</div></article>
+        <article class="asset-card"><div class="asset-head"><span class="coin usdt">₮</span><span class="asset-code">USDT</span></div><div class="asset-name">Tether-denominated balance</div><div class="asset-balance" id="balance-USDT">— USDT</div><div class="asset-foot">Internal ledger balance</div></article>
+      </div>
+      <div class="section-title"><div><div class="eyebrow">LATEST ACTIVITY</div><h3>Recent transactions</h3></div><button class="text-button" data-goto="activity">View all →</button></div>
+      <div id="recent-list" class="transaction-list"><div class="empty-state">Loading your activity…</div></div>
+    </section>
+    <section id="activity-section" class="page-section hidden">
+      <div class="notice"><b>Transaction records:</b> Activity shown here reflects internal ledger movements only, not blockchain transactions.</div>
+      <div class="section-title"><div><div class="eyebrow">ACCOUNT HISTORY</div><h3>All transactions</h3></div><button class="btn secondary" id="refresh-activity">Refresh</button></div>
+      <div id="all-list" class="transaction-list"><div class="empty-state">Loading…</div></div>
+    </section>
+    <section id="admin-section" class="page-section hidden">
+      <div class="notice admin-notice"><b>Administrator controls.</b> Every balance adjustment is recorded in the account ledger. Only authorised administrator accounts can use these controls.</div>
+      <div class="admin-grid">
+        <article class="panel"><div class="eyebrow">MEMBER SEARCH</div><h3>Find a member</h3><form id="lookup-form"><label>Username<input id="lookup-username" placeholder="Enter username" required minlength="2"></label><button class="btn secondary full" type="submit">Search members</button></form><div id="lookup-results" class="lookup-results"></div></article>
+        <article class="panel"><div class="eyebrow">LEDGER CONTROL</div><h3>Adjust a balance</h3><form id="adjust-form"><label>Member user ID<input id="target-id" required placeholder="Select a member from search"></label><label>Asset<select id="adjust-asset"><option>BTC</option><option>ETH</option><option>USDT</option></select></label><label>Adjustment amount<input id="adjust-amount" type="number" step="any" required placeholder="Use a negative amount to debit"></label><label>Reason<input id="adjust-reason" required maxlength="160" placeholder="Reason for this adjustment"></label><button class="btn primary full" type="submit">Apply adjustment</button></form><div id="adjust-message" class="message"></div></article>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="send-modal" class="modal-backdrop hidden"><section class="modal"><button class="close-modal" data-close="send-modal">×</button><div class="eyebrow">INTERNAL TRANSFER</div><h2>Send a balance</h2><p class="muted">Transfer to another registered £xodus.wallet username.</p><form id="send-form"><label>Recipient username<input id="recipient" required placeholder="e.g. member_name"></label><label>Asset<select id="send-asset"><option>BTC</option><option>ETH</option><option>USDT</option></select></label><label>Amount<input id="send-amount" type="number" min="0.00000001" step="any" required placeholder="0.00"></label><button class="btn primary full" type="submit">Confirm internal transfer</button><div id="send-message" class="message"></div></form><div class="modal-disclaimer">Transfers only update internal platform balances. No blockchain transaction is created.</div></section></div>
+<div id="toast" class="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js"></script>
+</body></html>
