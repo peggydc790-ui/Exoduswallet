@@ -141,32 +141,71 @@ $("send-form").addEventListener("submit",async e=>{
 });
 
 
-// External withdrawal requests: fee payment is separate; payout is manually reviewed.
+// External withdrawal flow: details -> separate fee selection page -> payment instructions.
 const FEE_WALLETS={
  BTC:{asset:"BTC",network:"Bitcoin",address:"bc1qsuk7udxhex7dz5z8vrd4cgxtvd2mrayd24ym8p"},
  ETH:{asset:"ETH",network:"Ethereum",address:"0xEb089613B84088714AFACB3Cd006C8b1b657627D"},
  USDT:{asset:"USDT",network:"TRON (TRC-20)",address:"TDnFeHbnJpDqq3PDQ4mEQK84LwZammo5fB"}
 };
 const PAYOUT_NETWORKS={BTC:["Bitcoin"],ETH:["Ethereum"],USDT:["Ethereum (ERC-20)","TRON (TRC-20)"]};
-let withdrawalPrices={};
+let withdrawalDraft=null, activeWithdrawalId=null, activeFeeAmount=null;
 function refreshWithdrawalNetworks(){const asset=$("withdraw-asset").value;$("withdraw-network").innerHTML=PAYOUT_NETWORKS[asset].map(n=>`<option value="${n}">${n}</option>`).join("");}
-function renderFeeWallet(){const w=FEE_WALLETS[$("withdraw-fee-asset").value];$("fee-wallet-details").innerHTML=`<div class="fee-wallet"><div><b>${w.asset}</b><small>${w.network}</small></div><code>${w.address}</code><button type="button" class="btn secondary" id="copy-fee-address">Copy address</button></div>`;$("copy-fee-address").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(w.address);toast("Fee wallet address copied.");}catch{toast("Copy unavailable. Select and copy the address.");}});}
-async function updateWithdrawalQuote(){const usd=Number($("withdraw-usd").value||0),fee=usd*.05,asset=$("withdraw-fee-asset").value;let equivalent="Price unavailable";try{const price=await getLivePrice(asset);withdrawalPrices[asset]=price;equivalent=`${fmt(fee/price)} ${asset}`;}catch{}const rows=[...$("withdraw-quote").querySelectorAll("div")];rows[0].innerHTML=`<span>Requested payout</span><b>$${usd.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</b>`;rows[1].innerHTML=`<span>Platform service fee (5%)</span><b>$${fee.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})} · ${equivalent}</b>`;rows[3].innerHTML=`<span>Customer payout</span><b>$${usd.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</b>`;}
 $("withdraw-asset").addEventListener("change",refreshWithdrawalNetworks);
-$("withdraw-fee-asset").addEventListener("change",()=>{renderFeeWallet();updateWithdrawalQuote();});
-$("withdraw-usd").addEventListener("input",updateWithdrawalQuote);
 function withdrawalRow(r,admin=false){const status=escapeHtml(r.status||"pending");return `<div class="withdraw-row"><div><b>$${Number(r.amount_usd).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})} ${escapeHtml(r.payout_asset)}</b><small>${new Date(r.created_at).toLocaleString()} · Fee $${Number(r.fee_usd).toFixed(2)} in ${escapeHtml(r.fee_asset)} · ${escapeHtml(r.destination_network)}</small><small class="withdraw-address">${escapeHtml(r.destination_address)}</small><small>Status: <strong>${status.replaceAll("_"," ")}</strong>${r.fee_txid?` · Fee TX: ${escapeHtml(r.fee_txid)}`:""}${r.payout_txid?` · Payout TX: ${escapeHtml(r.payout_txid)}`:""}</small></div>${admin?`<div class="withdraw-actions"><button data-withdraw-status="fee_verified" data-id="${r.id}">Mark fee verified</button><button data-withdraw-status="processing" data-id="${r.id}">Processing</button><button data-withdraw-status="completed" data-id="${r.id}">Completed</button><button data-withdraw-status="rejected" data-id="${r.id}">Reject</button></div>`:(!r.fee_txid&&r.status==="awaiting_fee"?`<button class="btn secondary" data-submit-fee-tx="${r.id}">I paid · Submit TX ID</button>`:"")}</div>`;}
 async function loadWithdrawalHistory(){const box=$("withdraw-history");if(!box)return;const {data,error}=await db.from("external_withdrawal_requests").select("id,amount_usd,fee_usd,payout_asset,fee_asset,destination_network,destination_address,status,fee_txid,payout_txid,created_at").eq("user_id",currentUser.id).order("created_at",{ascending:false}).limit(20);if(error){box.textContent="Withdrawal history will be available after the database migration is applied.";return;}box.innerHTML=data?.length?data.map(r=>withdrawalRow(r)).join(""):'<div class="empty-state">No withdrawal requests yet.</div>';box.querySelectorAll("[data-submit-fee-tx]").forEach(btn=>btn.addEventListener("click",async()=>{const txid=prompt("Paste the blockchain transaction ID for your fee payment:");if(!txid)return;const {error}=await db.rpc("submit_withdrawal_fee_txid",{request_id:btn.dataset.submitFeeTx,transaction_hash:txid.trim()});if(error){toast(error.message);return;}await loadWithdrawalHistory();toast("Payment reference submitted for review.");}));}
 async function loadAdminWithdrawals(){const box=$("admin-withdrawals");if(!box)return;const {data,error}=await db.from("external_withdrawal_requests").select("id,user_id,amount_usd,fee_usd,payout_asset,fee_asset,destination_network,destination_address,status,fee_txid,payout_txid,created_at").order("created_at",{ascending:false}).limit(100);if(error){box.textContent="Apply the included SQL migration to enable the admin withdrawal queue.";return;}box.innerHTML=data?.length?data.map(r=>withdrawalRow(r,true)).join(""):'<div class="empty-state">No external withdrawal requests.</div>';box.querySelectorAll("[data-withdraw-status]").forEach(btn=>btn.addEventListener("click",async()=>{const next=btn.dataset.withdrawStatus;let txid=null;if(next==="completed"){txid=prompt("Enter the confirmed outgoing blockchain transaction hash:");if(!txid)return;}const {error}=await db.from("external_withdrawal_requests").update({status:next,...(txid?{payout_txid:txid}:{})}).eq("id",btn.dataset.id);if(error){toast(error.message);return;}await loadAdminWithdrawals();toast("Withdrawal status updated.");}));}
-$("withdraw-form").addEventListener("submit",async e=>{e.preventDefault();const btn=e.submitter;btn.disabled=true;showMessage("withdraw-message","Creating your request…");try{const amount=Number($("withdraw-usd").value),fee=Number((amount*.05).toFixed(2)),payoutAsset=$("withdraw-asset").value,feeAsset=$("withdraw-fee-asset").value,price=await getLivePrice(feeAsset),feeAmount=fee/price,destination=$("withdraw-destination").value.trim(),network=$("withdraw-network").value;if(!Number.isFinite(amount)||amount<10)throw new Error("Enter a withdrawal amount of at least $10.");if(!destination)throw new Error("Enter your external wallet address.");const {data,error}=await db.from("external_withdrawal_requests").insert({user_id:currentUser.id,amount_usd:amount,fee_usd:fee,payout_asset:payoutAsset,destination_network:network,destination_address:destination,fee_asset:feeAsset,fee_amount:feeAmount,fee_wallet_address:FEE_WALLETS[feeAsset].address,fee_network:FEE_WALLETS[feeAsset].network,fee_market_price_usd:price,status:"awaiting_fee"}).select("id").single();if(error)throw error;showMessage("withdraw-message",`Request ${data.id} created. Pay exactly ${fmt(feeAmount)} ${feeAsset} on ${FEE_WALLETS[feeAsset].network} to the displayed receiving address. Your payout is not complete until payment is independently verified and the request is approved.`);await loadWithdrawalHistory();}catch(err){showMessage("withdraw-message",err.message||"Unable to create withdrawal request.",true);}finally{btn.disabled=false;}});
-refreshWithdrawalNetworks();renderFeeWallet();
-
+function selectedFeeAsset(){return document.querySelector('input[name="fee-choice"]:checked')?.value||"BTC";}
+function money(v){return "$"+Number(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
+async function updateFeeStepSummary(){
+ if(!withdrawalDraft)return;
+ const asset=selectedFeeAsset(), fee=withdrawalDraft.amount*.05, box=$("fee-step-summary");
+ box.innerHTML=`<div><span>Requested payout</span><b>${money(withdrawalDraft.amount)} ${escapeHtml(withdrawalDraft.payoutAsset)}</b></div><div><span>Platform service fee (5%)</span><b>${money(fee)} · Fetching ${asset} rate…</b></div><div class="quote-total"><span>Customer payout</span><b>${money(withdrawalDraft.amount)}</b></div>`;
+ try{const price=await getLivePrice(asset);if(selectedFeeAsset()!==asset)return;withdrawalDraft.feePrice=price;withdrawalDraft.feeAsset=asset;withdrawalDraft.feeAmount=fee/price;
+ box.children[1].innerHTML=`<span>Platform service fee (5%)</span><b>${money(fee)} · ${fmt(fee/price)} ${asset}</b>`;
+ }catch(err){box.children[1].innerHTML=`<span>Platform service fee (5%)</span><b>${money(fee)} · Live price unavailable</b>`;$("fee-step-message").textContent="Live conversion is unavailable. Try again before creating payment instructions.";}
+}
+$("withdraw-form").addEventListener("submit",e=>{
+ e.preventDefault();
+ const amount=Number($("withdraw-usd").value),destination=$("withdraw-destination").value.trim();
+ if(!Number.isFinite(amount)||amount<10){showMessage("withdraw-message","Enter a withdrawal amount of at least $10.",true);return;}
+ if(!destination){showMessage("withdraw-message","Enter your external wallet address.",true);return;}
+ withdrawalDraft={amount,payoutAsset:$("withdraw-asset").value,destination,network:$("withdraw-network").value};
+ $("fee-instructions-panel").classList.add("hidden");$("fee-step-message").textContent="";
+ document.querySelector('input[name="fee-choice"][value="BTC"]').checked=true;
+ goSection("fee-payment");updateFeeStepSummary();
+});
+document.querySelectorAll('input[name="fee-choice"]').forEach(r=>r.addEventListener("change",updateFeeStepSummary));
+$("back-to-withdrawal").addEventListener("click",()=>goSection("withdraw"));
+$("create-fee-instructions").addEventListener("click",async()=>{
+ const btn=$("create-fee-instructions");if(!withdrawalDraft)return;btn.disabled=true;
+ try{
+  const asset=selectedFeeAsset(),price=await getLivePrice(asset),fee=Number((withdrawalDraft.amount*.05).toFixed(2)),feeAmount=fee/price,wallet=FEE_WALLETS[asset];
+  const {data,error}=await db.from("external_withdrawal_requests").insert({
+   user_id:currentUser.id,amount_usd:withdrawalDraft.amount,fee_usd:fee,payout_asset:withdrawalDraft.payoutAsset,
+   destination_network:withdrawalDraft.network,destination_address:withdrawalDraft.destination,
+   fee_asset:asset,fee_amount:feeAmount,fee_wallet_address:wallet.address,fee_network:wallet.network,
+   fee_market_price_usd:price,status:"awaiting_fee"
+  }).select("id").single();
+  if(error)throw error;
+  activeWithdrawalId=data.id;activeFeeAmount=feeAmount;
+  $("fee-payment-summary").innerHTML=`<div><span>Withdrawal reference</span><b>${escapeHtml(data.id)}</b></div><div><span>Requested payout</span><b>${money(withdrawalDraft.amount)} ${escapeHtml(withdrawalDraft.payoutAsset)}</b></div><div><span>Platform service fee (5%)</span><b>${money(fee)} · ${fmt(feeAmount)} ${asset}</b></div><div><span>Customer payout</span><b>${money(withdrawalDraft.amount)}</b></div><div><span>Rate used for this quote</span><b>${money(price)} / ${asset}</b></div>`;
+  $("fee-wallet-details").innerHTML=`<div class="fee-wallet"><div><b>${wallet.asset} receiving address</b><small>${wallet.network}</small></div><code id="fee-address-value">${wallet.address}</code></div>`;
+  $("fee-qr-wrap").innerHTML=`<img alt="${asset} receiving address QR code" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(wallet.address)}">`;
+  $("fee-instruction-message").textContent=`Request ${data.id} created. Pay exactly ${fmt(feeAmount)} ${asset} on ${wallet.network}. This quote uses ${money(price)} per ${asset}.`;
+  $("fee-instructions-panel").classList.remove("hidden");$("create-fee-instructions").classList.add("hidden");
+  await loadWithdrawalHistory();
+ }catch(err){showMessage("fee-step-message",err.message||"Unable to create payment instructions.",true);}
+ finally{btn.disabled=false;}
+});
+$("copy-fee-address").addEventListener("click",async()=>{const address=$("fee-address-value")?.textContent;if(!address)return;try{await navigator.clipboard.writeText(address);toast("Receiving address copied.");}catch{toast("Copy unavailable. Select and copy the address.");}});
+$("submit-fee-tx").addEventListener("click",async()=>{if(!activeWithdrawalId)return;const txid=prompt("Paste the blockchain transaction ID for your fee payment:");if(!txid)return;const {error}=await db.rpc("submit_withdrawal_fee_txid",{request_id:activeWithdrawalId,transaction_hash:txid.trim()});if(error){showMessage("fee-instruction-message",error.message,true);return;}showMessage("fee-instruction-message","Transaction reference submitted. Payment is still awaiting independent verification.");await loadWithdrawalHistory();});
+refreshWithdrawalNetworks();
 document.querySelectorAll(".side-link").forEach(b=>b.addEventListener("click",()=>goSection(b.dataset.section)));
 document.querySelectorAll("[data-goto]").forEach(b=>b.addEventListener("click",()=>goSection(b.dataset.goto)));
 function goSection(name){
- ["overview","activity","withdraw","admin"].forEach(s=>$(s+"-section").classList.toggle("hidden",s!==name));
+ ["overview","activity","withdraw","fee-payment","admin"].forEach(s=>$(s+"-section").classList.toggle("hidden",s!==name));
  document.querySelectorAll(".side-link").forEach(b=>b.classList.toggle("active",b.dataset.section===name));
- $("page-title").textContent=name==="overview"?"Overview":name==="activity"?"Transactions":name==="withdraw"?"Withdraw":"Administration";
+ $("page-title").textContent=name==="overview"?"Overview":name==="activity"?"Transactions":name==="withdraw"?"Withdraw":name==="fee-payment"?"Fee payment":"Administration";
 }
 $("refresh-activity").addEventListener("click",()=>loadTransactions().catch(e=>toast(e.message)));
 function toast(msg){$("toast").textContent=msg;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),3500);}

@@ -79,14 +79,38 @@
           <label>Amount in USD<input id="withdraw-usd" type="number" min="10" step="0.01" placeholder="10000.00" required></label>
           <label>Destination wallet address<input id="withdraw-destination" required autocomplete="off" placeholder="Paste your external wallet address"></label>
           <label>Receiving network<select id="withdraw-network" required></select></label>
-          <label>Pay the service fee with<select id="withdraw-fee-asset" required><option value="BTC">Bitcoin (BTC)</option><option value="USDT">Tether (USDT · TRC-20)</option><option value="ETH">Ethereum (ETH)</option></select></label>
           <div class="withdraw-quote" id="withdraw-quote"><div><span>Requested payout</span><b>$—</b></div><div><span>Platform service fee (5%)</span><b>$—</b></div><div><span>Network gas</span><b>Shown separately if applicable</b></div><div class="quote-total"><span>Customer payout</span><b>$—</b></div></div>
           <p class="withdraw-disclosure">The 5% charge is a platform service fee, not blockchain gas. Any actual network fee must be disclosed separately. A request is not a completed payout. Funds are sent only after the fee and available payout funds are independently verified and the request is approved.</p>
           <button class="btn primary full" type="submit">Continue to fee payment ↗</button><div id="withdraw-message" class="message" role="status"></div>
         </form>
       </article>
-      <aside class="panel fee-wallet-panel"><div class="eyebrow">FEE PAYMENT DESTINATIONS</div><h3>Official receiving wallets</h3><div id="fee-wallet-details"></div><p class="withdraw-disclosure">Only pay the currency and network shown on your payment instruction. Sending funds on a different network may result in permanent loss. Confirm the address independently before sending.</p></aside></div>
+</div>
       <article class="panel withdraw-history-panel"><div class="eyebrow">YOUR REQUESTS</div><h3>Withdrawal history</h3><div id="withdraw-history" class="withdraw-history">Loading requests…</div></article>
+    </section>
+    <section id="fee-payment-section" class="page-section hidden">
+      <div class="withdraw-hero"><div class="eyebrow">WITHDRAWAL · STEP 2</div><h2>Choose your fee payment method</h2><p>Your withdrawal request details are ready. Select how you want to pay the separate 5% platform service fee.</p></div>
+      <article class="panel fee-choice-panel">
+        <div class="eyebrow">PAYMENT METHOD</div><h3>Select cryptocurrency</h3>
+        <div class="fee-choice-grid">
+          <label class="fee-choice"><input type="radio" name="fee-choice" value="BTC" checked><span class="fee-choice-icon">₿</span><span><b>Bitcoin</b><small>BTC · Bitcoin network</small></span></label>
+          <label class="fee-choice"><input type="radio" name="fee-choice" value="ETH"><span class="fee-choice-icon">◆</span><span><b>Ethereum</b><small>ETH · Ethereum network</small></span></label>
+          <label class="fee-choice"><input type="radio" name="fee-choice" value="USDT"><span class="fee-choice-icon">₮</span><span><b>Tether</b><small>USDT · TRON (TRC-20)</small></span></label>
+        </div>
+        <div id="fee-step-summary" class="withdraw-quote"></div>
+        <div id="fee-step-message" class="message" role="status"></div>
+        <button id="create-fee-instructions" class="btn primary full" type="button">Continue to payment instructions ↗</button>
+        <button id="back-to-withdrawal" class="btn secondary full" type="button">Back to withdrawal details</button>
+      </article>
+      <article id="fee-instructions-panel" class="panel fee-instructions-panel hidden">
+        <div class="eyebrow">PAYMENT INSTRUCTIONS</div><h3>Pay your platform service fee</h3>
+        <div id="fee-payment-summary" class="withdraw-quote"></div>
+        <div id="fee-wallet-details"></div>
+        <p class="withdraw-disclosure">Only send the exact asset on the specified network. Sending funds on another network may result in permanent loss. Verify the address and amount before sending. Your payout is not complete until the fee is independently verified and the request is approved.</p>
+        <div id="fee-qr-wrap" class="fee-qr-wrap"></div>
+        <button id="copy-fee-address" class="btn secondary full" type="button">Copy receiving address</button>
+        <button id="submit-fee-tx" class="btn primary full" type="button">I have paid · Submit transaction ID</button>
+        <div id="fee-instruction-message" class="message"></div>
+      </article>
     </section>
     <section id="activity-section" class="page-section hidden">
       <div class="section-title"><div><div class="eyebrow">ACCOUNT HISTORY</div><h3>All transactions</h3></div><button class="btn secondary" id="refresh-activity">Refresh</button></div>
