@@ -4,7 +4,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_t6LzKQt77Wom4Uhl8PmdFw_JFfsiNCZ";
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = (id) => document.getElementById(id);
 let currentUser = null, currentProfile = null, authMode = "login", feeSettings = {};
-const ASSETS = ["BTC","ETH","USDT"];
+let ASSETS = ["BTC","ETH","USDT"];
+let assetMeta = {BTC:{id:"bitcoin",name:"Bitcoin"},ETH:{id:"ethereum",name:"Ethereum"},USDT:{id:"tether",name:"Tether"}};
+let cataloguePage=1, catalogueRows=[], coinSearchTimer=null, isMasterAdmin=false;
 
 function showMessage(id, text, bad=false) { const el=$(id); el.textContent=text; el.className="message"+(bad?" error":""); }
 function fmt(value) { const n=Number(value||0); return n.toLocaleString(undefined,{maximumFractionDigits:8}); }
@@ -40,16 +42,18 @@ async function boot(){
   const {data:{user},error}=await db.auth.getUser();
   if(error||!user){showAuth();return;}
   currentUser=user;
-  const {data:profile,error:profileError}=await db.from("profiles").select("id,username,wallet_address,role,created_at").eq("id",user.id).single();
+  const {data:profile,error:profileError}=await db.from("profiles").select("id,username,wallet_address,role,created_at,account_status").eq("id",user.id).single();
   if(profileError) throw profileError;
   currentProfile=profile;
+  if(profile.account_status==="suspended") { await db.auth.signOut(); throw new Error("This account is suspended. Contact the administrator."); }
+  isMasterAdmin=profile.username==="member_0ef824a0" && profile.role==="admin";
   $("wallet-address").textContent=profile.wallet_address||"—";
   $("auth-view").classList.add("hidden"); $("app-view").classList.remove("hidden");
   const username=profile.username||"Member", initial=username.slice(0,1).toUpperCase();
   $("welcome-name").textContent=username; $("side-username").textContent=username; $("side-email").textContent=user.email||"";
   $("avatar").textContent=initial; $("header-avatar").textContent=initial;
   $("admin-nav").classList.toggle("hidden",profile.role!=="admin");
-  await loadBalances(); await loadTransactions(); await loadFeeSettings();
+  await loadAssetRegistry(); await loadBalances(); await loadTransactions(); await loadFeeSettings(); await loadCatalogue(); await recordLoginEvent(); await loadLoginHistory(); await loadPortfolio(); if(profile.role==="admin") await loadAdminStats();
 }
 function showAuth(){currentUser=null;currentProfile=null;$("app-view").classList.add("hidden");$("auth-view").classList.remove("hidden");}
 async function loadBalances(){
@@ -66,14 +70,14 @@ async function loadFeeSettings(){
 }
 function updateFeePreview(){
   const asset=$("send-asset")?.value||"BTC", fee=feeSettings[asset];
-  if($("fee-preview"))$("fee-preview").textContent=fee?`Transfer fee: ${fmt(fee.amount)} ${fee.asset}`:"Transfer fee: unavailable";
+  if($("fee-preview"))$("fee-preview").textContent=fee&&fee.amount>0?`Transfer fee: ${fmt(fee.amount)} ${fee.asset}`:"No configured transfer fee";
 }
 $("send-asset").addEventListener("change",updateFeePreview);
 $("send-amount").addEventListener("input",updateFeePreview);
 $("fee-form").addEventListener("submit",async e=>{
   e.preventDefault();const btn=e.submitter;btn.disabled=true;showMessage("fee-message","Saving fees…");
   try{
-    for(const asset of ASSETS){const amount=Number($("fee-"+asset).value);if(!Number.isFinite(amount)||amount<0)throw new Error("Enter a valid non-negative fee for each asset.");
+    for(const asset of ["BTC","ETH","USDT"]){const amount=Number($("fee-"+asset).value);if(!Number.isFinite(amount)||amount<0)throw new Error("Enter a valid non-negative fee for each asset.");
       const {error}=await db.rpc("admin_update_fee",{transfer_asset:asset,fee_amount:amount});if(error)throw error;}
     await loadFeeSettings();showMessage("fee-message","Fee settings saved.");
   }catch(err){showMessage("fee-message",err.message||"Unable to save fees.",true);}finally{btn.disabled=false;}
@@ -107,7 +111,7 @@ $("copy-wallet-address").addEventListener("click",async()=>{
 document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>$ (b.dataset.close).classList.add("hidden")));
 $("send-modal").addEventListener("click",e=>{if(e.target===$("send-modal"))$("send-modal").classList.add("hidden");});
 async function getLivePrice(asset){
- const ids={BTC:"bitcoin",ETH:"ethereum",USDT:"tether"};
+ const ids={BTC:"bitcoin",ETH:"ethereum",USDT:"tether",...Object.fromEntries(Object.entries(assetMeta).map(([k,v])=>[k,v.id]))};
  const response=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids[asset]}&vs_currencies=usd`,{cache:"no-store"});
  if(!response.ok)throw new Error("Live market price is temporarily unavailable. Please try again.");
  const data=await response.json();const price=Number(data?.[ids[asset]]?.usd);
@@ -156,7 +160,7 @@ $("lookup-form").addEventListener("submit",async e=>{
  try{
   const {data,error}=await db.rpc("admin_find_user",{search_username:$("lookup-username").value.trim()});
   if(error)throw error;
-  box.innerHTML=data?.length?data.map(u=>`<button type="button" class="member-result" data-id="${u.user_id}"><b>@${escapeHtml(u.username)}</b><small>${u.user_id}</small></button>`).join(""):"No matching members.";
+  box.innerHTML=data?.length?data.map(u=>`<div class="member-result"><button type="button" class="text-button" data-id="${u.user_id}">@${escapeHtml(u.username)}</button><small>${escapeHtml(u.email||"")} · ${escapeHtml(u.wallet_address||"")} · ${escapeHtml(u.account_status||"active")}</small><button type="button" data-suspend="${u.user_id}" data-status="${u.account_status==='suspended'?'active':'suspended'}">${u.account_status==='suspended'?'Reactivate':'Suspend'}</button></div>`).join(""):"No matching members.";
   box.querySelectorAll("[data-id]").forEach(b=>b.addEventListener("click",()=>{$("target-id").value=b.dataset.id;toast("Member selected.");}));
  }catch(err){box.textContent=err.message;}
 });
@@ -170,5 +174,76 @@ $("adjust-form").addEventListener("submit",async e=>{
  }catch(err){showMessage("adjust-message",err.message,true);}finally{btn.disabled=false;}
 });
 $("logout").addEventListener("click",async()=>{await db.auth.signOut();showAuth();});
-db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT")showAuth();});
+db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT")showAuth();if(event==="PASSWORD_RECOVERY")$("password-reset-modal").classList.remove("hidden");});
 db.auth.getSession().then(({data})=>{if(data.session)boot().catch(err=>toast(err.message));});
+
+
+// V8 dynamic catalogue and portfolio layer.
+async function loadBalances(){
+ const {data,error}=await db.from("wallet_balances").select("asset,balance").eq("user_id",currentUser.id);
+ if(error)throw error;
+ const rows=data||[]; ASSETS=[...new Set([...Object.keys(assetMeta),...rows.map(x=>x.asset)])].sort((a,b)=>["BTC","ETH","USDT"].indexOf(a)-["BTC","ETH","USDT"].indexOf(b));
+ const grid=$("wallet-asset-grid"); grid.innerHTML=isMasterAdmin?ASSETS.map(asset=>`<article class="asset-card"><div class="asset-head"><span class="coin">∞</span><span class="asset-code">${escapeHtml(asset)}</span></div><div class="asset-balance">∞</div><div class="asset-foot">${escapeHtml(assetMeta[asset]?.name||asset)}</div></article>`).join(""):rows.length?rows.map(row=>`<article class="asset-card"><div class="asset-head"><span class="coin">${escapeHtml((row.asset||"?").slice(0,1))}</span><span class="asset-code">${escapeHtml(row.asset)}</span></div><div class="asset-balance">${fmt(row.balance)} ${escapeHtml(row.asset)}</div><div class="asset-foot">${escapeHtml(assetMeta[row.asset]?.name||row.asset)}</div></article>`).join(""):'<div class="empty-state">No funded assets yet. Browse the catalogue below.</div>';
+ const opts=ASSETS.map(a=>`<option value="${escapeHtml(a)}">`).join("");
+ if($("asset-options"))$("asset-options").innerHTML=opts;
+ if($("send-asset-options"))$("send-asset-options").innerHTML=opts;
+}
+async function loadCatalogue(search=""){
+ const box=$("catalogue-list"); if(!box)return;
+ try{
+  let url;
+  if(search.trim()) url=`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(search.trim())}`;
+  else url=`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${cataloguePage}&sparkline=false`;
+  const res=await fetch(url,{headers:{accept:"application/json"}}); if(!res.ok)throw new Error("Market catalogue is rate-limited. Try again shortly."); const raw=await res.json();
+  const rows=search.trim()?(raw.coins||[]).slice(0,30).map(c=>({id:c.id,symbol:c.symbol,name:c.name,image:c.large||c.thumb,market_cap_rank:c.market_cap_rank,current_price:null})):(raw||[]);
+  if(!search.trim()){catalogueRows=cataloguePage===1?rows:[...catalogueRows,...rows];}
+  const shown=search.trim()?rows:catalogueRows;
+  $("catalogue-count").textContent=`${shown.length.toLocaleString()} assets shown`;
+  box.innerHTML=shown.map(c=>{const sym=String(c.symbol||"").toUpperCase();const active=ASSETS.includes(sym);return `<div class="catalogue-item"><img src="${escapeHtml(c.image||"")}" alt="" loading="lazy"><div><b>${escapeHtml(c.name)}</b><small>${escapeHtml(sym)}${c.market_cap_rank?" · Rank #"+c.market_cap_rank:""}${c.current_price?" · $"+Number(c.current_price).toLocaleString():""}</small></div><button type="button" data-coin-id="${escapeHtml(c.id)}" data-coin-symbol="${escapeHtml(sym)}" data-coin-name="${escapeHtml(c.name)}" data-coin-image="${escapeHtml(c.image||"")}" ${active?"disabled":""}>${active?"Added":"Add coin"}</button></div>`}).join("")||'<div class="empty-state">No matching coins found.</div>';
+ }catch(err){box.innerHTML=`<div class="empty-state">${escapeHtml(err.message)}</div>`;}
+}
+async function addCatalogueCoin(button){
+ const sym=button.dataset.coinSymbol,id=button.dataset.coinId,name=button.dataset.coinName,image=button.dataset.coinImage;
+ if(!/^[A-Z0-9]{2,15}$/.test(sym)){toast("This asset has an unsupported symbol format.");return;}
+ button.disabled=true;
+ try{
+  const {error}=await db.rpc("register_crypto_asset",{asset_symbol:sym,asset_name:name,market_id:id,asset_image:image}); if(error)throw error;
+  assetMeta[sym]={id,name}; await loadBalances(); await loadPortfolio(); button.textContent="Added";toast(`${name} added to supported assets.`);
+ }catch(err){button.disabled=false;toast(err.message||"Unable to add this asset.");}
+}
+async function loadPortfolio(){
+ const {data,error}=await db.from("wallet_balances").select("asset,balance").eq("user_id",currentUser.id);if(error)throw error;
+ if(isMasterAdmin){$("portfolio-total").textContent="∞";$("portfolio-change").textContent="Master administrator · unlimited balances";$("portfolio-updated").textContent="All enabled assets";$("portfolio-breakdown").innerHTML="";return;}
+ const rows=(data||[]).filter(r=>Number(r.balance)>0);if(!rows.length){$("portfolio-total").textContent="$0.00";$("portfolio-change").textContent="No funded assets";$("portfolio-updated").textContent="Live market prices";$("portfolio-breakdown").innerHTML="";return;}
+ const ids=[...new Set(rows.map(r=>assetMeta[r.asset]?.id).filter(Boolean))];
+ try{
+  if(!ids.length)throw new Error("Prices unavailable for your current holdings.");
+  const res=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(",")}&vs_currencies=usd&include_24hr_change=true`);if(!res.ok)throw new Error("Market price service temporarily unavailable.");const prices=await res.json();let total=0,unpriced=[];
+  let previousTotal=0;const html=rows.map(r=>{const id=assetMeta[r.asset]?.id,p=prices[id]?.usd;if(!p){unpriced.push(r.asset);return `<div class="portfolio-line"><span>${escapeHtml(r.asset)} · ${fmt(r.balance)}</span><b>Price unavailable</b></div>`;}const value=Number(r.balance)*Number(p);total+=value;const pct=Number(prices[id]?.usd_24h_change);if(Number.isFinite(pct)&&1+pct/100>0)previousTotal+=value/(1+pct/100);return `<div class="portfolio-line"><span>${escapeHtml(r.asset)} · ${fmt(r.balance)}</span><b>$${value.toLocaleString("en-US",{maximumFractionDigits:2})}</b></div>`;}).join("");
+  const change=previousTotal>0?((total-previousTotal)/previousTotal)*100:null;$("portfolio-total").textContent=`$${total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;$("portfolio-change").textContent=unpriced.length?`Some prices unavailable: ${unpriced.join(", ")}`:change===null?"24h change unavailable":`${change>=0?"+":""}${change.toFixed(2)}% over 24h`;$("portfolio-updated").textContent=`Updated ${new Date().toLocaleTimeString()}`;$("portfolio-breakdown").innerHTML=html;
+ }catch(err){$("portfolio-change").textContent=err.message;$("portfolio-updated").textContent="Unable to refresh";}
+}
+async function loadAdminStats(){try{const {data,error}=await db.rpc("admin_dashboard_stats");if(error)throw error;$("admin-stats").innerHTML=`<div class="stat-card"><small>Total members</small><b>${Number(data.members).toLocaleString()}</b></div><div class="stat-card"><small>Transactions</small><b>${Number(data.transactions).toLocaleString()}</b></div><div class="stat-card"><small>Suspended members</small><b>${Number(data.suspended_members).toLocaleString()}</b></div>`;}catch(e){$("admin-stats").textContent=e.message;}}
+$("coin-search")?.addEventListener("input",e=>{clearTimeout(coinSearchTimer);coinSearchTimer=setTimeout(()=>loadCatalogue(e.target.value),450);});
+$("load-more-coins")?.addEventListener("click",()=>{cataloguePage++;loadCatalogue();});
+$("catalogue-list")?.addEventListener("click",e=>{const b=e.target.closest("[data-coin-id]");if(b)addCatalogueCoin(b);});
+$("refresh-portfolio")?.addEventListener("click",()=>loadPortfolio().catch(e=>toast(e.message)));
+setInterval(()=>{if(currentUser&&!document.hidden)loadPortfolio().catch(()=>{});},60000);
+$("forgot-password")?.addEventListener("click",async()=>{const email=$("email").value.trim();if(!email){showMessage("auth-message","Enter your email address first.",true);return;}const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin});showMessage("auth-message",error?error.message:"Password reset link sent. Check your email.",!!error);});
+$("signout-others")?.addEventListener("click",async()=>{const {error}=await db.auth.signOut({scope:"others"});showMessage("security-message",error?error.message:"Other active sessions have been signed out.",!!error);});
+let pendingTotpFactor=null;
+$("enable-mfa")?.addEventListener("click",async()=>{try{const {data,error}=await db.auth.mfa.enroll({factorType:"totp",friendlyName:"£xodus.wallet authenticator"});if(error)throw error;pendingTotpFactor=data.id;$("mfa-instructions").textContent="Scan this QR code with an authenticator app, then enter its 6-digit code.";$("mfa-qr").src=data.totp.qr_code;$("mfa-qr").classList.remove("hidden");$("mfa-box").classList.remove("hidden");showMessage("security-message","Authenticator setup started.");}catch(e){showMessage("security-message",e.message,true);}});
+$("verify-mfa")?.addEventListener("click",async()=>{try{if(!pendingTotpFactor)throw new Error("Start authenticator setup first.");const {data:challenge,error:ce}=await db.auth.mfa.challenge({factorId:pendingTotpFactor});if(ce)throw ce;const {error}=await db.auth.mfa.verify({factorId:pendingTotpFactor,challengeId:challenge.id,code:$("mfa-code").value.trim()});if(error)throw error;showMessage("security-message","Two-factor authentication enabled.");$("mfa-box").classList.add("hidden");pendingTotpFactor=null;}catch(e){showMessage("security-message",e.message,true);}});
+$("lookup-results")?.addEventListener("click",async e=>{const b=e.target.closest("[data-suspend]");if(!b)return;try{const {error}=await db.rpc("admin_set_account_status",{target_user:b.dataset.suspend,new_status:b.dataset.status});if(error)throw error;toast(`Member ${b.dataset.status}.`);$("lookup-form").requestSubmit();await loadAdminStats();}catch(err){toast(err.message);}});
+const oldGoSection=goSection; goSection=function(name){oldGoSection(name);if(name==="admin"&&currentProfile?.role==="admin")loadAdminStats();};
+
+async function loadAssetRegistry(){
+ const {data,error}=await db.from("crypto_assets").select("symbol,name,coingecko_id,image_url,market_cap_rank").eq("is_active",true);
+ if(error)throw error;for(const row of data||[]){assetMeta[row.symbol]={id:row.coingecko_id,name:row.name,image:row.image_url};}
+}
+async function recordLoginEvent(){try{await db.rpc("record_wallet_login",{client_user_agent:navigator.userAgent.slice(0,240)});}catch(e){console.warn("Login event was not recorded",e.message);}}
+
+async function loadLoginHistory(){const box=$("login-history");if(!box||!currentUser)return;const {data,error}=await db.from("wallet_login_events").select("created_at,user_agent").eq("user_id",currentUser.id).order("created_at",{ascending:false}).limit(5);if(error){box.textContent="Sign-in history unavailable.";return;}box.innerHTML=data?.length?data.map(x=>`<div class="login-entry">${new Date(x.created_at).toLocaleString()}<small>${escapeHtml(x.user_agent||"Device information unavailable")}</small></div>`).join(""):"No sign-in history yet.";}
+$("limit-form")?.addEventListener("submit",async e=>{e.preventDefault();const min=Number($("limit-min").value),max=$("limit-max").value.trim()===""?null:Number($("limit-max").value);try{const {error}=await db.rpc("admin_set_transfer_limit",{asset_code:$("limit-asset").value,min_value:min,max_value:max});if(error)throw error;showMessage("limit-message","Transfer limits saved.");}catch(err){showMessage("limit-message",err.message,true);}});
+
+$("password-reset-form")?.addEventListener("submit",async e=>{e.preventDefault();const password=$("new-password").value;try{const {error}=await db.auth.updateUser({password});if(error)throw error;$("password-reset-modal").classList.add("hidden");showMessage("auth-message","Password updated. Sign in with your new password.");await db.auth.signOut();}catch(err){showMessage("password-reset-message",err.message,true);}});
