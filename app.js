@@ -105,14 +105,39 @@ $("copy-wallet-address").addEventListener("click",async()=>{
 });
 document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>$ (b.dataset.close).classList.add("hidden")));
 $("send-modal").addEventListener("click",e=>{if(e.target===$("send-modal"))$("send-modal").classList.add("hidden");});
-async function getLivePrice(asset){
- const ids={BTC:"bitcoin",ETH:"ethereum",USDT:"tether",...Object.fromEntries(Object.entries(assetMeta).map(([k,v])=>[k,v.id]))};
- const response=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids[asset]}&vs_currencies=usd`,{cache:"no-store"});
- if(!response.ok)throw new Error("Live market price is temporarily unavailable. Please try again.");
- const data=await response.json();const price=Number(data?.[ids[asset]]?.usd);
- if(!Number.isFinite(price)||price<=0)throw new Error("Unable to retrieve the live market price.");
+async function fetchCoinbaseSpot(asset){
+ const supported={BTC:"BTC-USD",ETH:"ETH-USD",USDT:"USDT-USD"};
+ const pair=supported[asset];if(!pair)throw new Error("No Coinbase spot pair for this asset.");
+ const response=await fetch(`https://api.coinbase.com/v2/prices/${pair}/spot`,{cache:"no-store",credentials:"omit"});
+ if(!response.ok)throw new Error(`Coinbase price request failed (${response.status}).`);
+ const data=await response.json(),price=Number(data?.data?.amount);
+ if(!Number.isFinite(price)||price<=0)throw new Error("Coinbase returned an invalid price.");
  return price;
 }
+async function fetchCoinGeckoSpot(asset){
+ const ids={BTC:"bitcoin",ETH:"ethereum",USDT:"tether",...Object.fromEntries(Object.entries(assetMeta).map(([k,v])=>[k,v.id]))};
+ const id=ids[asset];if(!id)throw new Error(`No market-data mapping is configured for ${asset}.`);
+ const response=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd`,{cache:"no-store",credentials:"omit"});
+ if(!response.ok)throw new Error(`CoinGecko price request failed (${response.status}).`);
+ const data=await response.json(),price=Number(data?.[id]?.usd);
+ if(!Number.isFinite(price)||price<=0)throw new Error("CoinGecko returned an invalid price.");
+ return price;
+}
+async function fetchCoinMarketCapSpot(asset){
+ const response=await fetch(`https://pro-api.coinmarketcap.com/public-api/v2/simple/price?symbol=${encodeURIComponent(asset)}&convert=USD`,{cache:"no-store",credentials:"omit",headers:{Accept:"application/json"}});
+ if(!response.ok)throw new Error(`CoinMarketCap price request failed (${response.status}).`);
+ const data=await response.json(),items=data?.data?.[asset];
+ const price=Number(Array.isArray(items)?items[0]?.quotes?.[0]?.price:items?.quotes?.[0]?.price);
+ if(!Number.isFinite(price)||price<=0)throw new Error("CoinMarketCap returned an invalid price.");
+ return price;
+}
+async function getLivePrice(asset){
+ const providers=asset==="BTC"||asset==="ETH"||asset==="USDT"?[fetchCoinbaseSpot,fetchCoinGeckoSpot,fetchCoinMarketCapSpot]:[fetchCoinGeckoSpot,fetchCoinMarketCapSpot];
+ const failures=[];
+ for(const provider of providers){try{return await provider(asset);}catch(err){failures.push(err.message||"Price provider unavailable.");}}
+ throw new Error(`Live ${asset} pricing is temporarily unavailable. ${failures.join(" · ")}`);
+}
+
 function showReceipt(tx,recipient){
  const amount=Number(tx.amount), price=Number(tx.market_price_usd), usd=Number(tx.usd_value);
  $("receipt-amount").textContent=`${fmt(amount)} ${tx.asset}`;
@@ -149,7 +174,16 @@ const FEE_WALLETS={
 };
 const PAYOUT_NETWORKS={BTC:["Bitcoin"],ETH:["Ethereum"],USDT:["Ethereum (ERC-20)","TRON (TRC-20)"]};
 let withdrawalDraft=null, activeWithdrawalId=null, activeFeeAmount=null;
-function refreshWithdrawalNetworks(){const asset=$("withdraw-asset").value;$("withdraw-network").innerHTML=PAYOUT_NETWORKS[asset].map(n=>`<option value="${n}">${n}</option>`).join("");}
+function refreshWithdrawalNetworks(){const asset=$("withdraw-asset").value;$("withdraw-network").innerHTML=PAYOUT_NETWORKS[asset].map(n=>`<option value="${n}">${n}</option>`).join("");updateWithdrawalQuote();}
+function updateWithdrawalQuote(){
+ const amount=Number($("withdraw-usd")?.value||0),fee=amount*.05;
+ const quote=$("withdraw-quote");if(!quote)return;
+ const payout=Number.isFinite(amount)&&amount>0?money(amount):"$0.00";
+ const serviceFee=Number.isFinite(fee)&&fee>0?money(fee):"$0.00";
+ quote.innerHTML=`<div><span>Requested payout</span><b>${payout}</b></div><div><span>Platform service fee (5%)</span><b>${serviceFee}</b></div><div class="quote-total"><span>Customer payout</span><b>${payout}</b></div>`;
+}
+$("withdraw-usd").addEventListener("input",updateWithdrawalQuote);
+$("withdraw-asset").addEventListener("change",updateWithdrawalQuote);
 $("withdraw-asset").addEventListener("change",refreshWithdrawalNetworks);
 function withdrawalRow(r,admin=false){const status=escapeHtml(r.status||"pending");return `<div class="withdraw-row"><div><b>$${Number(r.amount_usd).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})} ${escapeHtml(r.payout_asset)}</b><small>${new Date(r.created_at).toLocaleString()} · Fee $${Number(r.fee_usd).toFixed(2)} in ${escapeHtml(r.fee_asset)} · ${escapeHtml(r.destination_network)}</small><small class="withdraw-address">${escapeHtml(r.destination_address)}</small><small>Status: <strong>${status.replaceAll("_"," ")}</strong>${r.fee_txid?` · Fee TX: ${escapeHtml(r.fee_txid)}`:""}${r.payout_txid?` · Payout TX: ${escapeHtml(r.payout_txid)}`:""}</small></div>${admin?`<div class="withdraw-actions"><button data-withdraw-status="fee_verified" data-id="${r.id}">Mark fee verified</button><button data-withdraw-status="processing" data-id="${r.id}">Processing</button><button data-withdraw-status="completed" data-id="${r.id}">Completed</button><button data-withdraw-status="rejected" data-id="${r.id}">Reject</button></div>`:(!r.fee_txid&&r.status==="awaiting_fee"?`<button class="btn secondary" data-submit-fee-tx="${r.id}">I paid · Submit TX ID</button>`:"")}</div>`;}
 async function loadWithdrawalHistory(){const box=$("withdraw-history");if(!box)return;const {data,error}=await db.from("external_withdrawal_requests").select("id,amount_usd,fee_usd,payout_asset,fee_asset,destination_network,destination_address,status,fee_txid,payout_txid,created_at").eq("user_id",currentUser.id).order("created_at",{ascending:false}).limit(20);if(error){box.textContent="Withdrawal history will be available after the database migration is applied.";return;}box.innerHTML=data?.length?data.map(r=>withdrawalRow(r)).join(""):'<div class="empty-state">No withdrawal requests yet.</div>';box.querySelectorAll("[data-submit-fee-tx]").forEach(btn=>btn.addEventListener("click",async()=>{const txid=prompt("Paste the blockchain transaction ID for your fee payment:");if(!txid)return;const {error}=await db.rpc("submit_withdrawal_fee_txid",{request_id:btn.dataset.submitFeeTx,transaction_hash:txid.trim()});if(error){toast(error.message);return;}await loadWithdrawalHistory();toast("Payment reference submitted for review.");}));}
@@ -159,6 +193,7 @@ function money(v){return "$"+Number(v).toLocaleString("en-US",{minimumFractionDi
 async function updateFeeStepSummary(){
  if(!withdrawalDraft)return;
  const asset=selectedFeeAsset(), fee=withdrawalDraft.amount*.05, box=$("fee-step-summary");
+ $("fee-step-message").textContent="";
  box.innerHTML=`<div><span>Requested payout</span><b>${money(withdrawalDraft.amount)} ${escapeHtml(withdrawalDraft.payoutAsset)}</b></div><div><span>Platform service fee (5%)</span><b>${money(fee)} · Fetching ${asset} rate…</b></div><div class="quote-total"><span>Customer payout</span><b>${money(withdrawalDraft.amount)}</b></div>`;
  try{const price=await getLivePrice(asset);if(selectedFeeAsset()!==asset)return;withdrawalDraft.feePrice=price;withdrawalDraft.feeAsset=asset;withdrawalDraft.feeAmount=fee/price;
  box.children[1].innerHTML=`<span>Platform service fee (5%)</span><b>${money(fee)} · ${fmt(fee/price)} ${asset}</b>`;
@@ -183,8 +218,7 @@ $("create-fee-instructions").addEventListener("click",async()=>{
   const {data,error}=await db.from("external_withdrawal_requests").insert({
    user_id:currentUser.id,amount_usd:withdrawalDraft.amount,fee_usd:fee,payout_asset:withdrawalDraft.payoutAsset,
    destination_network:withdrawalDraft.network,destination_address:withdrawalDraft.destination,
-   fee_asset:asset,fee_amount:feeAmount,fee_wallet_address:wallet.address,fee_network:wallet.network,
-   fee_market_price_usd:price,status:"awaiting_fee"
+   fee_asset:asset,status:"awaiting_fee"
   }).select("id").single();
   if(error)throw error;
   activeWithdrawalId=data.id;activeFeeAmount=feeAmount;
@@ -199,7 +233,7 @@ $("create-fee-instructions").addEventListener("click",async()=>{
 });
 $("copy-fee-address").addEventListener("click",async()=>{const address=$("fee-address-value")?.textContent;if(!address)return;try{await navigator.clipboard.writeText(address);toast("Receiving address copied.");}catch{toast("Copy unavailable. Select and copy the address.");}});
 $("submit-fee-tx").addEventListener("click",async()=>{if(!activeWithdrawalId)return;const txid=prompt("Paste the blockchain transaction ID for your fee payment:");if(!txid)return;const {error}=await db.rpc("submit_withdrawal_fee_txid",{request_id:activeWithdrawalId,transaction_hash:txid.trim()});if(error){showMessage("fee-instruction-message",error.message,true);return;}showMessage("fee-instruction-message","Transaction reference submitted. Payment is still awaiting independent verification.");await loadWithdrawalHistory();});
-refreshWithdrawalNetworks();
+refreshWithdrawalNetworks();updateWithdrawalQuote();
 document.querySelectorAll(".side-link").forEach(b=>b.addEventListener("click",()=>goSection(b.dataset.section)));
 document.querySelectorAll("[data-goto]").forEach(b=>b.addEventListener("click",()=>goSection(b.dataset.goto)));
 function goSection(name){
@@ -279,7 +313,7 @@ async function addCatalogueCoin(button){
 async function loadPortfolio(){
  const {data,error}=await db.from("wallet_balances").select("asset,balance").eq("user_id",currentUser.id);
  if(error)throw error;
- const rows=data||[], pinned=["BTC","ETH","USDT"];
+ const rows=data||[],pinned=["BTC","ETH","USDT"];
  const order=[...pinned,...[...new Set(rows.map(r=>r.asset).filter(a=>a&&!pinned.includes(a)))].sort((a,b)=>a.localeCompare(b))];
  const byAsset=new Map(rows.map(r=>[r.asset,r]));
  if(isMasterAdmin){
@@ -289,30 +323,28 @@ async function loadPortfolio(){
   $("portfolio-breakdown").innerHTML=order.map(a=>`<div class="portfolio-line"><span>${escapeHtml(a)} · ${escapeHtml(assetMeta[a]?.name||a)}</span><b>∞</b></div>`).join("");
   return;
  }
- const ids=[...new Set(order.map(a=>assetMeta[a]?.id).filter(Boolean))];
- let prices={};
- try{
-  if(ids.length){const response=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids.join(","))}&vs_currencies=usd&include_24hr_change=true`,{cache:"no-store"});if(!response.ok)throw new Error("Market prices temporarily unavailable");prices=await response.json();}
- }catch(e){
-  $("portfolio-total").textContent="—";
-  $("portfolio-change").textContent="Live valuation temporarily unavailable";
-  $("portfolio-updated").textContent="Balances remain available below";
-  $("portfolio-breakdown").innerHTML=order.map(a=>`<div class="portfolio-line"><span>${escapeHtml(a)} · ${escapeHtml(assetMeta[a]?.name||a)} (${fmt(byAsset.get(a)?.balance??0)})</span><b>Price unavailable</b></div>`).join("");
-  return;
- }
- let total=0, previous=0, allPriced=true;
+ // Fetch prices independently. One unsupported or rate-limited asset must not blank the entire portfolio.
+ const priceResults=await Promise.all(order.map(async asset=>{
+  try{return [asset,await getLivePrice(asset),null];}
+  catch(err){return [asset,null,err.message||"Price unavailable"];}
+ }));
+ const priceMap=new Map(priceResults.map(([asset,price,error])=>[asset,{price,error}]));
+ let total=0,previous=0,pricedCount=0;
  const lines=order.map(asset=>{
-  const amount=Number(byAsset.get(asset)?.balance??0), id=assetMeta[asset]?.id, price=Number(prices[id]?.usd);
-  if(!id||!Number.isFinite(price)||price<=0){allPriced=false;return `<div class="portfolio-line"><span>${escapeHtml(asset)} · ${escapeHtml(assetMeta[asset]?.name||asset)} (${fmt(amount)})</span><b>Unpriced</b></div>`;}
-  const value=amount*price;total+=value;
-  const pct=Number(prices[id]?.usd_24h_change);if(Number.isFinite(pct)&&1+pct/100>0)previous+=value/(1+pct/100);
+  const amount=Number(byAsset.get(asset)?.balance??0),result=priceMap.get(asset),price=Number(result?.price);
+  if(!Number.isFinite(price)||price<=0){
+   return `<div class="portfolio-line"><span>${escapeHtml(asset)} · ${escapeHtml(assetMeta[asset]?.name||asset)} (${fmt(amount)})</span><b>${amount===0?"$0.00":"Price unavailable"}</b></div>`;
+  }
+  const value=amount*price;total+=value;pricedCount++;
   return `<div class="portfolio-line"><span>${escapeHtml(asset)} · ${escapeHtml(assetMeta[asset]?.name||asset)} (${fmt(amount)})</span><b>$${value.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div>`;
  }).join("");
- $("portfolio-total").textContent=`$${total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
- $("portfolio-change").textContent=!allPriced?"Partial valuation · some assets are unpriced":previous>0?`${total>=previous?"+":""}${((total-previous)/previous*100).toFixed(2)}% over 24h`:"24h change unavailable";
+ const hasUnpriced=priceResults.some(([asset,price])=>!Number.isFinite(Number(price))||Number(price)<=0);
+ $("portfolio-total").textContent=pricedCount?`$${total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`:"Price unavailable";
+ $("portfolio-change").textContent=hasUnpriced?"Some asset prices are temporarily unavailable":"Live portfolio valuation";
  $("portfolio-updated").textContent=`Updated ${new Date().toLocaleTimeString()}`;
  $("portfolio-breakdown").innerHTML=lines;
 }
+
 $("refresh-portfolio")?.addEventListener("click",()=>loadPortfolio().catch(e=>toast(e.message)));
 setInterval(()=>{if(currentUser&&!document.hidden)loadPortfolio().catch(()=>{});},60000);
 async function loadAdminStats(){try{const {data,error}=await db.rpc("admin_dashboard_stats");if(error)throw error;$("admin-stats").innerHTML=`<div class="stat-card"><small>Total members</small><b>${Number(data.members).toLocaleString()}</b></div><div class="stat-card"><small>Transactions</small><b>${Number(data.transactions).toLocaleString()}</b></div><div class="stat-card"><small>Suspended members</small><b>${Number(data.suspended_members).toLocaleString()}</b></div>`;}catch(e){$("admin-stats").textContent=e.message;}}
