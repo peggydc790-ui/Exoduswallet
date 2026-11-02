@@ -53,7 +53,7 @@ async function boot(){
   $("welcome-name").textContent=username; $("side-username").textContent=username; $("side-email").textContent=user.email||"";
   $("avatar").textContent=initial; $("header-avatar").textContent=initial;
   $("admin-nav").classList.toggle("hidden",profile.role!=="admin");
-  await loadAssetRegistry(); await loadBalances(); await loadTransactions(); await loadFeeSettings(); await loadCatalogue(); await recordLoginEvent(); await loadLoginHistory(); await loadPortfolio(); if(profile.role==="admin") await loadAdminStats();
+  await loadAssetRegistry(); await loadBalances(); await loadTransactions(); await loadFeeSettings(); await loadCatalogue(); await recordLoginEvent(); await loadLoginHistory(); if(profile.role==="admin") await loadAdminStats();
 }
 function showAuth(){currentUser=null;currentProfile=null;$("app-view").classList.add("hidden");$("auth-view").classList.remove("hidden");}
 async function loadBalances(){
@@ -208,27 +208,13 @@ async function addCatalogueCoin(button){
  button.disabled=true;
  try{
   const {error}=await db.rpc("register_crypto_asset",{asset_symbol:sym,asset_name:name,market_id:id,asset_image:image}); if(error)throw error;
-  assetMeta[sym]={id,name}; await loadBalances(); await loadPortfolio(); button.textContent="Added";toast(`${name} added to supported assets.`);
+  assetMeta[sym]={id,name}; await loadBalances(); button.textContent="Added";toast(`${name} added to supported assets.`);
  }catch(err){button.disabled=false;toast(err.message||"Unable to add this asset.");}
-}
-async function loadPortfolio(){
- const {data,error}=await db.from("wallet_balances").select("asset,balance").eq("user_id",currentUser.id);if(error)throw error;
- if(isMasterAdmin){$("portfolio-total").textContent="∞";$("portfolio-change").textContent="Master administrator · unlimited balances";$("portfolio-updated").textContent="All enabled assets";$("portfolio-breakdown").innerHTML="";return;}
- const rows=(data||[]).filter(r=>Number(r.balance)>0);if(!rows.length){$("portfolio-total").textContent="$0.00";$("portfolio-change").textContent="No funded assets";$("portfolio-updated").textContent="Live market prices";$("portfolio-breakdown").innerHTML="";return;}
- const ids=[...new Set(rows.map(r=>assetMeta[r.asset]?.id).filter(Boolean))];
- try{
-  if(!ids.length)throw new Error("Prices unavailable for your current holdings.");
-  const res=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(",")}&vs_currencies=usd&include_24hr_change=true`);if(!res.ok)throw new Error("Market price service temporarily unavailable.");const prices=await res.json();let total=0,unpriced=[];
-  let previousTotal=0;const html=rows.map(r=>{const id=assetMeta[r.asset]?.id,p=prices[id]?.usd;if(!p){unpriced.push(r.asset);return `<div class="portfolio-line"><span>${escapeHtml(r.asset)} · ${fmt(r.balance)}</span><b>Price unavailable</b></div>`;}const value=Number(r.balance)*Number(p);total+=value;const pct=Number(prices[id]?.usd_24h_change);if(Number.isFinite(pct)&&1+pct/100>0)previousTotal+=value/(1+pct/100);return `<div class="portfolio-line"><span>${escapeHtml(r.asset)} · ${fmt(r.balance)}</span><b>$${value.toLocaleString("en-US",{maximumFractionDigits:2})}</b></div>`;}).join("");
-  const change=previousTotal>0?((total-previousTotal)/previousTotal)*100:null;$("portfolio-total").textContent=`$${total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;$("portfolio-change").textContent=unpriced.length?`Some prices unavailable: ${unpriced.join(", ")}`:change===null?"24h change unavailable":`${change>=0?"+":""}${change.toFixed(2)}% over 24h`;$("portfolio-updated").textContent=`Updated ${new Date().toLocaleTimeString()}`;$("portfolio-breakdown").innerHTML=html;
- }catch(err){$("portfolio-change").textContent=err.message;$("portfolio-updated").textContent="Unable to refresh";}
 }
 async function loadAdminStats(){try{const {data,error}=await db.rpc("admin_dashboard_stats");if(error)throw error;$("admin-stats").innerHTML=`<div class="stat-card"><small>Total members</small><b>${Number(data.members).toLocaleString()}</b></div><div class="stat-card"><small>Transactions</small><b>${Number(data.transactions).toLocaleString()}</b></div><div class="stat-card"><small>Suspended members</small><b>${Number(data.suspended_members).toLocaleString()}</b></div>`;}catch(e){$("admin-stats").textContent=e.message;}}
 $("coin-search")?.addEventListener("input",e=>{clearTimeout(coinSearchTimer);coinSearchTimer=setTimeout(()=>loadCatalogue(e.target.value),450);});
 $("load-more-coins")?.addEventListener("click",()=>{cataloguePage++;loadCatalogue();});
 $("catalogue-list")?.addEventListener("click",e=>{const b=e.target.closest("[data-coin-id]");if(b)addCatalogueCoin(b);});
-$("refresh-portfolio")?.addEventListener("click",()=>loadPortfolio().catch(e=>toast(e.message)));
-setInterval(()=>{if(currentUser&&!document.hidden)loadPortfolio().catch(()=>{});},60000);
 $("forgot-password")?.addEventListener("click",async()=>{const email=$("email").value.trim();if(!email){showMessage("auth-message","Enter your email address first.",true);return;}const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin});showMessage("auth-message",error?error.message:"Password reset link sent. Check your email.",!!error);});
 $("signout-others")?.addEventListener("click",async()=>{const {error}=await db.auth.signOut({scope:"others"});showMessage("security-message",error?error.message:"Other active sessions have been signed out.",!!error);});
 let pendingTotpFactor=null;

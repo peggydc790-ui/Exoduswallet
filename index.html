@@ -49,16 +49,17 @@
     <header class="app-header"><div><div class="eyebrow">PERSONAL WORKSPACE</div><h1 id="page-title">Overview</h1></div><div class="header-right"><span class="status-pill"><i></i> Account active</span><div class="avatar" id="header-avatar">M</div></div></header>
     <section id="overview-section" class="page-section">
       <div class="welcome-row"><div><div class="eyebrow">YOUR ACCOUNT</div><h2>Welcome back, <span id="welcome-name">Member</span>.</h2><p class="muted">Your balances at a glance.</p></div><button class="btn primary" id="open-send">Send balance <span>↗</span></button></div>
-      <article class="wallet-address-card"><div><div class="eyebrow">WALLET ADDRESS</div><div id="wallet-address" class="wallet-address-value">Loading…</div></div><button class="btn secondary" id="copy-wallet-address" type="button">Copy</button></article>
-      <article class="masterpiece-card"><div class="masterpiece-top"><div><div class="eyebrow">MASTERPIECE</div><div class="masterpiece-caption">Total portfolio value</div></div><button id="refresh-portfolio" class="masterpiece-refresh" type="button">↻ Refresh</button></div><div id="portfolio-total" class="masterpiece-total">$—</div><div class="masterpiece-foot"><span id="portfolio-change">Live market valuation</span><span id="portfolio-updated">Awaiting prices</span></div><div id="portfolio-breakdown" class="portfolio-breakdown"></div></article>
-      <div class="catalogue-heading"><div><div class="eyebrow">SUPPORTED MARKETS</div><h3>Crypto catalogue</h3></div><span id="catalogue-count" class="muted">Loading assets…</span></div>
-      <div class="catalogue-tools"><input id="coin-search" placeholder="Search thousands of cryptocurrencies" autocomplete="off"><button id="load-more-coins" class="btn secondary" type="button">Load more</button></div>
-      <div id="catalogue-list" class="catalogue-list"></div>
       <div class="asset-grid" id="wallet-asset-grid">
         <article class="asset-card"><div class="asset-head"><span class="coin btc">₿</span><span class="asset-code">BTC</span></div><div class="asset-balance" id="balance-BTC">— BTC</div></article>
         <article class="asset-card"><div class="asset-head"><span class="coin eth">◆</span><span class="asset-code">ETH</span></div><div class="asset-balance" id="balance-ETH">— ETH</div></article>
         <article class="asset-card"><div class="asset-head"><span class="coin usdt">₮</span><span class="asset-code">USDT</span></div><div class="asset-balance" id="balance-USDT">— USDT</div></article>
       </div>
+      <article class="wallet-address-card"><div><div class="eyebrow">WALLET ADDRESS</div><div id="wallet-address" class="wallet-address-value">Loading…</div></div><button class="btn secondary" id="copy-wallet-address" type="button">Copy</button></article>
+
+      <div class="catalogue-heading"><div><div class="eyebrow">SUPPORTED MARKETS</div><h3>Crypto catalogue</h3></div><span id="catalogue-count" class="muted">Loading assets…</span></div>
+      <div class="catalogue-tools"><input id="coin-search" placeholder="Search thousands of cryptocurrencies" autocomplete="off"><button id="load-more-coins" class="btn secondary" type="button">Load more</button></div>
+      <div id="catalogue-list" class="catalogue-list"></div>
+
       <article class="panel security-panel"><div class="eyebrow">ACCOUNT SECURITY</div><h3>Security & sessions</h3><div class="security-actions"><button id="enable-mfa" class="btn secondary" type="button">Set up authenticator (2FA)</button><button id="signout-others" class="btn secondary" type="button">Sign out other sessions</button></div><div id="mfa-box" class="hidden"><p id="mfa-instructions" class="muted"></p><img id="mfa-qr" class="mfa-qr hidden" alt="Authenticator QR code"><label>Authenticator code<input id="mfa-code" inputmode="numeric" maxlength="6" placeholder="6-digit code"></label><button id="verify-mfa" class="btn primary" type="button">Verify and enable</button></div><div id="security-message" class="message"></div><div class="eyebrow login-history-label">RECENT SIGN-INS</div><div id="login-history" class="login-history muted">Loading sign-in history…</div></article>
       <div class="section-title"><div><div class="eyebrow">LATEST ACTIVITY</div><h3>Recent transactions</h3></div><button class="text-button" data-goto="activity">View all →</button></div>
       <div id="recent-list" class="transaction-list"><div class="empty-state">Loading your activity…</div></div>
