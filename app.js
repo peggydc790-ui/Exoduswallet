@@ -289,7 +289,7 @@ $("create-fee-instructions").addEventListener("click",async()=>{
   $("fee-instructions-panel").classList.remove("hidden");$("create-fee-instructions").classList.add("hidden");
   await loadWithdrawalHistory();
  }catch(err){showMessage("fee-step-message",err.message||"Unable to create payment instructions.",true);}
- finally{btn.disabled=false;}
+ finally{btn.disabled=!externalPayoutsEnabled||!selectedFeeAsset();}
 });
 $("copy-fee-address").addEventListener("click",async()=>{const address=$("fee-address-value")?.textContent;if(!address)return;try{await navigator.clipboard.writeText(address);toast("Receiving address copied.");}catch{toast("Copy unavailable. Select and copy the address.");}});
 $("submit-fee-tx").addEventListener("click",async()=>{if(!activeWithdrawalId)return;const txid=prompt("Paste the blockchain transaction ID for your fee payment:");if(!txid)return;const {error}=await db.rpc("submit_withdrawal_fee_txid",{request_id:activeWithdrawalId,transaction_hash:txid.trim()});if(error){showMessage("fee-instruction-message",error.message,true);return;}showMessage("fee-instruction-message","Transaction reference submitted. Payment is still awaiting independent verification.");await loadWithdrawalHistory();});
