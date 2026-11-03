@@ -101,7 +101,7 @@ returns void
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $submit$
 begin
   if (select auth.uid()) is null then raise exception 'Authentication required'; end if;
   if transaction_hash is null or length(trim(transaction_hash)) < 20 or length(trim(transaction_hash)) > 160 then
