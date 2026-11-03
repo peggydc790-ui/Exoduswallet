@@ -53,7 +53,8 @@ begin
   new.updated_at := now();
   return new;
 end;
-$$;
+$;
+revoke all on function public.set_withdrawal_fee_destination() from public, anon, authenticated;
 
 drop trigger if exists trg_set_withdrawal_fee_destination on public.external_withdrawal_requests;
 create trigger trg_set_withdrawal_fee_destination
@@ -224,7 +225,8 @@ begin
   new.updated_at := now();
   return new;
 end;
-$$;
+$;
+revoke all on function public.enforce_external_withdrawal_capacity() from public, anon, authenticated;
 drop trigger if exists trg_enforce_external_withdrawal_capacity on public.external_withdrawal_requests;
 create trigger trg_enforce_external_withdrawal_capacity
 before insert or update on public.external_withdrawal_requests
