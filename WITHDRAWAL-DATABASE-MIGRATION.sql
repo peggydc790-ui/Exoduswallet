@@ -34,7 +34,7 @@ create index if not exists external_withdrawal_requests_status_created_idx
   on public.external_withdrawal_requests(status, created_at desc);
 
 create or replace function public.set_withdrawal_fee_destination()
-returns trigger language plpgsql set search_path = public as $$
+returns trigger language plpgsql set search_path = '' as $
 begin
   new.fee_usd := round(new.amount_usd * 0.05, 2);
   -- Never trust a price or crypto fee amount supplied by a browser/client.
