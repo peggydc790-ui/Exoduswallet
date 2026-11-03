@@ -34,7 +34,7 @@ create index if not exists external_withdrawal_requests_status_created_idx
   on public.external_withdrawal_requests(status, created_at desc);
 
 create or replace function public.set_withdrawal_fee_destination()
-returns trigger language plpgsql set search_path = '' as $
+returns trigger language plpgsql set search_path = '' as $submit$
 begin
   new.fee_usd := round(new.amount_usd * 0.05, 2);
   -- Never trust a price or crypto fee amount supplied by a browser/client.
@@ -112,7 +112,7 @@ begin
   where id = request_id and user_id = (select auth.uid()) and status = 'awaiting_fee' and fee_txid is null;
   if not found then raise exception 'Request not found or fee reference already submitted'; end if;
 end;
-$$;
+$submit$;
 revoke all on function public.submit_withdrawal_fee_txid(uuid,text) from public, anon;
 grant execute on function public.submit_withdrawal_fee_txid(uuid,text) to authenticated;
 
