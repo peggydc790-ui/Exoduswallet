@@ -4,6 +4,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_t6LzKQt77Wom4Uhl8PmdFw_JFfsiNCZ";
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = (id) => document.getElementById(id);
 let currentUser = null, currentProfile = null, authMode = "login", feeSettings = {};
+let externalPayoutsEnabled = false;
 let ASSETS = ["BTC","ETH","USDT"];
 let assetMeta = {BTC:{id:"bitcoin",name:"Bitcoin"},ETH:{id:"ethereum",name:"Ethereum"},USDT:{id:"tether",name:"Tether"}};
 let cataloguePage=1, catalogueRows=[], coinSearchTimer=null, isMasterAdmin=false;
@@ -47,6 +48,8 @@ async function boot(){
   currentProfile=profile;
   if(profile.account_status==="suspended") { await db.auth.signOut(); throw new Error("This account is suspended. Contact the administrator."); }
   isMasterAdmin=profile.username==="member_0ef824a0" && profile.role==="admin";
+  // Fail closed: a missing or unavailable capacity setting keeps external payouts paused.
+  await loadExternalPayoutStatus();
   $("wallet-address").textContent=profile.wallet_address||"—";
   $("auth-view").classList.add("hidden"); $("app-view").classList.remove("hidden");
   const username=profile.username||"Member", initial=username.slice(0,1).toUpperCase();
@@ -208,23 +211,52 @@ function updateWithdrawalQuote(){
 $("withdraw-usd").addEventListener("input",updateWithdrawalQuote);
 $("withdraw-asset").addEventListener("change",updateWithdrawalQuote);
 $("withdraw-asset").addEventListener("change",refreshWithdrawalNetworks);
-function withdrawalRow(r,admin=false){const status=escapeHtml(r.status||"pending");return `<div class="withdraw-row"><div><b>$${Number(r.amount_usd).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})} ${escapeHtml(r.payout_asset)}</b><small>${new Date(r.created_at).toLocaleString()} · Fee $${Number(r.fee_usd).toFixed(2)} in ${escapeHtml(r.fee_asset)} · ${escapeHtml(r.destination_network)}</small><small class="withdraw-address">${escapeHtml(r.destination_address)}</small><small>Status: <strong>${status.replaceAll("_"," ")}</strong>${r.fee_txid?` · Fee TX: ${escapeHtml(r.fee_txid)}`:""}${r.payout_txid?` · Payout TX: ${escapeHtml(r.payout_txid)}`:""}</small></div>${admin?`<div class="withdraw-actions"><button data-withdraw-status="fee_verified" data-id="${r.id}">Mark fee verified</button><button data-withdraw-status="processing" data-id="${r.id}">Processing</button><button data-withdraw-status="completed" data-id="${r.id}">Completed</button><button data-withdraw-status="rejected" data-id="${r.id}">Reject</button></div>`:(!r.fee_txid&&r.status==="awaiting_fee"?`<button class="btn secondary" data-submit-fee-tx="${r.id}">I paid · Submit TX ID</button>`:"")}</div>`;}
+function withdrawalRow(r,admin=false){const status=escapeHtml(r.status||"pending");return `<div class="withdraw-row"><div><b>${Number(r.amount_usd).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})} ${escapeHtml(r.payout_asset)}</b><small>${new Date(r.created_at).toLocaleString()} · Fee ${Number(r.fee_usd).toFixed(2)} in ${escapeHtml(r.fee_asset)} · ${escapeHtml(r.destination_network)}</small><small class="withdraw-address">${escapeHtml(r.destination_address)}</small><small>Status: <strong>${status.replaceAll("_"," ")}</strong>${r.fee_txid?` · Fee TX: ${escapeHtml(r.fee_txid)}`:""}${r.payout_txid?` · Payout TX: ${escapeHtml(r.payout_txid)}`:""}</small></div>${admin?`<div class="withdraw-actions"><button data-withdraw-status="fee_verified" data-id="${r.id}" ${r.status==="awaiting_fee"&&r.fee_txid?"":"disabled"}>Mark fee verified</button><button data-withdraw-status="processing" data-id="${r.id}" ${externalPayoutsEnabled&&r.status==="fee_verified"&&r.fee_txid?"":"disabled"}>Processing</button><button data-withdraw-status="completed" data-id="${r.id}" ${externalPayoutsEnabled&&r.status==="processing"?"":"disabled"}>Completed</button><button data-withdraw-status="rejected" data-id="${r.id}" ${["awaiting_fee","fee_verified"].includes(r.status)?"":"disabled"}>Reject</button></div>`:(!r.fee_txid&&r.status==="awaiting_fee"?`<button class="btn secondary" data-submit-fee-tx="${r.id}">I paid · Submit TX ID</button>`:"")}</div>`;}
 async function loadWithdrawalHistory(){const box=$("withdraw-history");if(!box)return;const {data,error}=await db.from("external_withdrawal_requests").select("id,amount_usd,fee_usd,payout_asset,fee_asset,destination_network,destination_address,status,fee_txid,payout_txid,created_at").eq("user_id",currentUser.id).order("created_at",{ascending:false}).limit(20);if(error){box.textContent="Withdrawal history will be available after the database migration is applied.";return;}box.innerHTML=data?.length?data.map(r=>withdrawalRow(r)).join(""):'<div class="empty-state">No withdrawal requests yet.</div>';box.querySelectorAll("[data-submit-fee-tx]").forEach(btn=>btn.addEventListener("click",async()=>{const txid=prompt("Paste the blockchain transaction ID for your fee payment:");if(!txid)return;const {error}=await db.rpc("submit_withdrawal_fee_txid",{request_id:btn.dataset.submitFeeTx,transaction_hash:txid.trim()});if(error){toast(error.message);return;}await loadWithdrawalHistory();toast("Payment reference submitted for review.");}));}
 async function loadAdminWithdrawals(){const box=$("admin-withdrawals");if(!box)return;const {data,error}=await db.from("external_withdrawal_requests").select("id,user_id,amount_usd,fee_usd,payout_asset,fee_asset,destination_network,destination_address,status,fee_txid,payout_txid,created_at").order("created_at",{ascending:false}).limit(100);if(error){box.textContent="Apply the included SQL migration to enable the admin withdrawal queue.";return;}box.innerHTML=data?.length?data.map(r=>withdrawalRow(r,true)).join(""):'<div class="empty-state">No external withdrawal requests.</div>';box.querySelectorAll("[data-withdraw-status]").forEach(btn=>btn.addEventListener("click",async()=>{const next=btn.dataset.withdrawStatus;const {data:current,error:readError}=await db.from("external_withdrawal_requests").select("status").eq("id",btn.dataset.id).single();if(readError){toast(readError.message);return;}if(next==="processing"&&current.status!=="fee_verified"){toast("Manually confirm the fee has arrived before processing.");return;}let txid=null;if(next==="fee_verified"&&!confirm("Confirm you personally checked the receiving wallet and the fee payment has arrived? This is a manual check, not an automatic blockchain verification."))return;if(next==="completed"){if(current.status!=="processing"){toast("Move the request to Processing first.");return;}txid=prompt("Enter the outgoing payout transaction reference after you have actually sent the BTC, ETH or USDT.");if(!txid||txid.trim().length<8){toast("A valid payout reference is required.");return;}}const {error}=await db.from("external_withdrawal_requests").update({status:next,...(txid?{payout_txid:txid.trim()}:{})}).eq("id",btn.dataset.id);if(error){toast(error.message);return;}await loadAdminWithdrawals();toast(next==="completed"?"Payout marked complete with its supplied transfer reference.":"Withdrawal status updated.");}));}
+async function loadExternalPayoutStatus(){
+ const {data,error}=await db.rpc("get_external_payout_status");
+ externalPayoutsEnabled=!error && data===true;
+ const paused=$("withdrawal-paused"), layout=$("withdrawal-layout");
+ if(paused)paused.classList.toggle("hidden",externalPayoutsEnabled);
+ if(layout)layout.classList.toggle("hidden",!externalPayoutsEnabled);
+ const status=$("external-payout-status"), note=$("external-payout-control-note"), toggle=$("toggle-external-payouts");
+ if(status)status.textContent=error?"Paused — status unavailable":externalPayoutsEnabled?"Enabled by administrator":"Paused — funding not confirmed";
+ if(note)note.textContent=error?"Payout status could not be confirmed. The system is keeping new requests and payout processing disabled.":externalPayoutsEnabled?"Enabled by an administrator's manual attestation. Wallet balances are not checked automatically.":"New requests and payout processing are paused until an administrator verifies sufficient real payout reserves.";
+ if(toggle){toggle.textContent=externalPayoutsEnabled?"Pause external payouts":"Enable external payouts";toggle.disabled=!!error;}
+ return externalPayoutsEnabled;
+}
+$("toggle-external-payouts")?.addEventListener("click",async()=>{
+ if(currentProfile?.role!=="admin")return;
+ const next=!externalPayoutsEnabled;
+ if(next){
+  const confirmation=prompt("Only enable after personally confirming that funded wallets hold enough real BTC, ETH and USDT to cover approved payouts. The system does not inspect wallet balances. Type FUNDED to confirm.");
+  if(confirmation!=="FUNDED")return;
+ }else if(!confirm("Pause new external withdrawal requests and payout processing?"))return;
+ const {error}=await db.rpc("admin_set_external_payouts_enabled",{p_enabled:next});
+ if(error){toast(error.message||"Unable to update payout availability.");return;}
+ await loadExternalPayoutStatus();
+ if(currentProfile?.role==="admin")await loadAdminWithdrawals();
+ toast(next?"External payouts enabled by administrator attestation.":"External payouts paused.");
+});
 function selectedFeeAsset(){return document.querySelector('input[name="fee-choice"]:checked')?.value||null;}
 function money(v){return "$"+Number(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
 async function updateFeeStepSummary(){
  if(!withdrawalDraft)return;
- const asset=selectedFeeAsset(), fee=withdrawalDraft.amount*.05, box=$("fee-step-summary");
+ const asset=selectedFeeAsset(), fee=withdrawalDraft.amount*.05, box=$("fee-step-summary"), createButton=$("create-fee-instructions");
+ if(createButton)createButton.disabled=!externalPayoutsEnabled||!asset;
  if(!asset){box.innerHTML='<div><span>Requested payout</span><b>'+money(withdrawalDraft.amount)+' '+escapeHtml(withdrawalDraft.payoutAsset)+'</b></div><div><span>Platform service fee</span><b>'+money(fee)+'</b></div><div class="quote-total"><span>Customer payout</span><b>'+money(withdrawalDraft.amount)+'</b></div>'; $("fee-step-message").textContent="Select BTC, ETH or USDT to continue."; return;}
  $("fee-step-message").textContent="";
+ if(createButton)createButton.disabled=true;
  box.innerHTML=`<div><span>Requested payout</span><b>${money(withdrawalDraft.amount)} ${escapeHtml(withdrawalDraft.payoutAsset)}</b></div><div><span>Platform service fee (5%)</span><b>${money(fee)} · Fetching ${asset} rate…</b></div><div class="quote-total"><span>Customer payout</span><b>${money(withdrawalDraft.amount)}</b></div>`;
  try{const price=await getLivePrice(asset);if(selectedFeeAsset()!==asset)return;withdrawalDraft.feePrice=price;withdrawalDraft.feeAsset=asset;withdrawalDraft.feeAmount=fee/price;
+ if(createButton)createButton.disabled=false;
  box.children[1].innerHTML=`<span>Platform service fee (5%)</span><b>${money(fee)} · ${fmt(fee/price)} ${asset}</b>`;
- }catch(err){box.children[1].innerHTML=`<span>Platform service fee (5%)</span><b>${money(fee)} · Live price unavailable</b>`;$("fee-step-message").textContent="Live conversion is unavailable. Try again before creating payment instructions.";}
+ }catch(err){if(createButton)createButton.disabled=true;box.children[1].innerHTML=`<span>Platform service fee (5%)</span><b>${money(fee)} · Live price unavailable</b>`;$("fee-step-message").textContent="Live conversion is unavailable. Try again before creating payment instructions.";}
 }
 $("withdraw-form").addEventListener("submit",e=>{
  e.preventDefault();
+ if(!externalPayoutsEnabled){showMessage("withdraw-message","External payouts are temporarily paused until funded payout capacity is confirmed. No service fee can be collected while paused.",true);return;}
  const amount=Number($("withdraw-usd").value),destination=$("withdraw-destination").value.trim();
  if(!Number.isFinite(amount)||amount<10){showMessage("withdraw-message","Enter a withdrawal amount of at least $10.",true);return;}
  if(!destination){showMessage("withdraw-message","Enter your external wallet address.",true);return;}
@@ -236,9 +268,13 @@ $("withdraw-form").addEventListener("submit",e=>{
 document.querySelectorAll('input[name="fee-choice"]').forEach(r=>r.addEventListener("change",updateFeeStepSummary));
 $("back-to-withdrawal").addEventListener("click",()=>goSection("withdraw"));
 $("create-fee-instructions").addEventListener("click",async()=>{
- const btn=$("create-fee-instructions");if(!withdrawalDraft)return;btn.disabled=true;
+ const btn=$("create-fee-instructions");if(!withdrawalDraft)return;
+ if(!externalPayoutsEnabled){showMessage("fee-step-message","External payouts are paused until funded payout capacity is confirmed.",true);return;}
+ const asset=selectedFeeAsset();
+ if(!asset){showMessage("fee-step-message","Select BTC, ETH or USDT before continuing.",true);return;}
+ btn.disabled=true;
  try{
-  const asset=selectedFeeAsset(),price=await getLivePrice(asset),fee=Number((withdrawalDraft.amount*.05).toFixed(2)),feeAmount=fee/price,wallet=FEE_WALLETS[asset];
+  const price=await getLivePrice(asset),fee=Number((withdrawalDraft.amount*.05).toFixed(2)),feeAmount=fee/price,wallet=FEE_WALLETS[asset];
   const {data,error}=await db.from("external_withdrawal_requests").insert({
    user_id:currentUser.id,amount_usd:withdrawalDraft.amount,fee_usd:fee,payout_asset:withdrawalDraft.payoutAsset,
    destination_network:withdrawalDraft.network,destination_address:withdrawalDraft.destination,
@@ -253,7 +289,7 @@ $("create-fee-instructions").addEventListener("click",async()=>{
   $("fee-instructions-panel").classList.remove("hidden");$("create-fee-instructions").classList.add("hidden");
   await loadWithdrawalHistory();
  }catch(err){showMessage("fee-step-message",err.message||"Unable to create payment instructions.",true);}
- finally{btn.disabled=false;}
+ finally{btn.disabled=!externalPayoutsEnabled||!selectedFeeAsset();}
 });
 $("copy-fee-address").addEventListener("click",async()=>{const address=$("fee-address-value")?.textContent;if(!address)return;try{await navigator.clipboard.writeText(address);toast("Receiving address copied.");}catch{toast("Copy unavailable. Select and copy the address.");}});
 $("submit-fee-tx").addEventListener("click",async()=>{if(!activeWithdrawalId)return;const txid=prompt("Paste the blockchain transaction ID for your fee payment:");if(!txid)return;const {error}=await db.rpc("submit_withdrawal_fee_txid",{request_id:activeWithdrawalId,transaction_hash:txid.trim()});if(error){showMessage("fee-instruction-message",error.message,true);return;}showMessage("fee-instruction-message","Transaction reference submitted. Payment is still awaiting independent verification.");await loadWithdrawalHistory();});
@@ -261,6 +297,7 @@ refreshWithdrawalNetworks();updateWithdrawalQuote();
 document.querySelectorAll(".side-link").forEach(b=>b.addEventListener("click",()=>goSection(b.dataset.section)));
 document.querySelectorAll("[data-goto]").forEach(b=>b.addEventListener("click",()=>goSection(b.dataset.goto)));
 function goSection(name){
+ if(name==="fee-payment"&&!externalPayoutsEnabled)name="withdraw";
  ["overview","activity","withdraw","fee-payment","admin"].forEach(s=>$(s+"-section").classList.toggle("hidden",s!==name));
  document.querySelectorAll(".side-link").forEach(b=>b.classList.toggle("active",b.dataset.section===name));
  $("page-title").textContent=name==="overview"?"Overview":name==="activity"?"Transactions":name==="withdraw"?"Withdraw":name==="fee-payment"?"Fee payment":"Administration";
