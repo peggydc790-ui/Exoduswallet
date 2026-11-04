@@ -1,4 +1,4 @@
-# £xodus.wallet — V8
+# £xodus.wallet — V9
 
 V8 introduces the MASTERPIECE portfolio card, a dynamic CoinGecko-powered crypto catalogue, per-user coin holdings, USD portfolio valuation, expanded administrator tools, unlimited balances for the one designated master administrator, account status controls, admin audit records, configurable transfer limits, password reset, optional TOTP MFA, sign-out of other sessions, and recent sign-in history.
 
@@ -17,3 +17,13 @@ V8 introduces the MASTERPIECE portfolio card, a dynamic CoinGecko-powered crypto
 
 ## Deployment
 Upload the contents of this folder to the existing GitHub repository's `main` branch. Cloudflare Workers is already connected to that repository. Wait for the new deployment to complete before testing the live site.
+
+
+## V9 interface upgrades
+- Receive-address QR code.
+- Device-local saved recipient address book.
+- Seven-day USD market chart for BTC, ETH and USDT.
+- Transaction search/filter and CSV export.
+- Printable transaction receipts (browser print dialog can save as PDF).
+- Optional browser alerts for incoming internal transfers while the app remains open.
+- No new database tables or balance mutations are required for these interface upgrades.
