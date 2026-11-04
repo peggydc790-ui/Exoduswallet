@@ -28,3 +28,23 @@
 @media(max-width:650px){.fee-choice-grid{grid-template-columns:1fr}.fee-choice{padding:14px}}
 
 .withdraw-layout{grid-template-columns:1fr}
+
+
+/* V9 interaction surfaces */
+.wallet-address-actions,.activity-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.address-book-panel,.market-chart-panel{margin:18px 0}
+.contact-form{display:grid;grid-template-columns:1fr 1.4fr auto;gap:10px;align-items:end}
+.contact-form button{height:42px}.contact-list{display:grid;gap:8px;margin-top:15px}
+.contact-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;background:#0d1527;border:1px solid #2b3852;border-radius:10px}
+.contact-row>div:first-child{display:grid;gap:5px;min-width:0}.contact-row b{font-size:12px}.contact-row small{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+.contact-actions{display:flex;gap:6px;flex-shrink:0}.contact-actions button{border:1px solid #46516d;background:#202b43;color:#e5eaff;border-radius:7px;padding:7px 9px;font-size:10px}
+.chart-heading,.chart-price-row,.chart-axis{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.chart-heading h3{margin-bottom:0}.chart-heading select{width:auto;max-width:190px}
+.market-chart{margin-top:18px;min-height:210px;background:#0d1527;border:1px solid #2b3852;border-radius:12px;padding:14px}
+.market-chart svg{width:100%;height:auto;display:block}.chart-price-row b{font:700 23px Manrope}
+.chart-axis,.chart-caption{font-size:10px;color:var(--muted)}.chart-axis{margin-top:4px}.chart-caption{margin-top:10px}
+.wallet-qr-code{display:grid;place-items:center;background:white;padding:14px;border-radius:12px;width:max-content;margin:20px auto}
+.qr-modal{text-align:center}.qr-modal code{display:block;font-size:10px;overflow-wrap:anywhere;color:#c8cde0}
+.activity-toolbar{align-items:flex-end}.activity-actions input{min-width:190px}
+@media(max-width:800px){.contact-form{grid-template-columns:1fr}.activity-toolbar{align-items:stretch;flex-direction:column}.activity-actions input{flex:1;min-width:100%}}
+@media(max-width:650px){.wallet-address-actions{width:100%}.wallet-address-actions .btn{flex:1}.contact-row{align-items:flex-start;flex-direction:column}.chart-heading{align-items:flex-start;flex-direction:column}.chart-heading select{width:100%;max-width:none}.activity-actions{display:grid;grid-template-columns:1fr 1fr}.activity-actions input{grid-column:1/-1}}
