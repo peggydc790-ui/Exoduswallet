@@ -97,7 +97,7 @@ function transactionRow(tx){
 }
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function loadTransactions(){
-  const {data,error}=await db.from("wallet_transactions").select("*").order("created_at",{ascending:false}).limit(50);
+  const {data,error}=await db.from("wallet_transactions").select("*").order("created_at",{ascending:false}).limit(500);
   if(error) throw error;
   txCache=data||[];
   const html=txCache.length?txCache.map(transactionRow).join(""):'<div class="empty-state">No transactions yet. Your activity will appear here.</div>';
