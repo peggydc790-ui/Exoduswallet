@@ -3,7 +3,9 @@
 V8 introduces the MASTERPIECE portfolio card, a dynamic CoinGecko-powered crypto catalogue, per-user coin holdings, USD portfolio valuation, expanded administrator tools, unlimited balances for the one designated master administrator, account status controls, admin audit records, configurable transfer limits, password reset, optional TOTP MFA, sign-out of other sessions, and recent sign-in history.
 
 ## Files
-- `index.html`, `styles.css`, `app.js` — V8 frontend.
+- `public/index.html`, `public/styles.css`, `public/app.js` — deployed frontend assets (Cloudflare Wrangler serves `public/`).
+- Root `index.html`, `styles.css`, `app.js` are kept synchronized as working copies.
+- `worker.js` and `wrangler.jsonc` — Cloudflare Worker entrypoint and static-assets configuration.
 - `V8-DATABASE-MIGRATION.sql` — primary database changes.
 - `V8-ADDITIONAL-DB-PATCH.sql` — follow-on database objects and function notes.
 - `V9-ADDITIONAL-DB-PATCH.sql` — additive performance indexes.
@@ -17,7 +19,7 @@ V8 introduces the MASTERPIECE portfolio card, a dynamic CoinGecko-powered crypto
 - Existing receipt UI is preserved; advanced receipt work remains deferred.
 
 ## Deployment
-Upload the contents of this folder to the existing GitHub repository's `main` branch. Cloudflare Workers is already connected to that repository. Wait for the new deployment to complete before testing the live site.
+The deployed Worker is `exoduswallet` and its Wrangler configuration serves the `public/` directory. The latest recorded deployment source is Wrangler; this repository currently has no GitHub Actions deployment workflow. A merge to `main` alone does not prove that the Worker has deployed. After the V9 branch is approved, deploy the updated `public/` assets through the existing Wrangler deployment workflow, then verify the live Worker before user testing.
 
 
 ## V9 interface upgrades
@@ -28,3 +30,5 @@ Upload the contents of this folder to the existing GitHub repository's `main` br
 - Printable transaction receipts (browser print dialog can save as PDF).
 - Optional browser alerts for incoming internal transfers while the app remains open.
 - No new database tables or balance mutations are required for these interface upgrades.
+- Added seven foreign-key indexes and combined the owner/admin withdrawal SELECT policies without changing their effective access rules.
+- Browser alerts are foreground polling notifications, not server push; they require the wallet to remain open in a supported browser.
