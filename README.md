@@ -6,6 +6,7 @@ V8 introduces the MASTERPIECE portfolio card, a dynamic CoinGecko-powered crypto
 - `index.html`, `styles.css`, `app.js` — V8 frontend.
 - `V8-DATABASE-MIGRATION.sql` — primary database changes.
 - `V8-ADDITIONAL-DB-PATCH.sql` — follow-on database objects and function notes.
+- `V9-ADDITIONAL-DB-PATCH.sql` — additive performance indexes.
 - `DATABASE-MIGRATION.sql` — original V7 migration, retained for reference.
 
 ## Important behaviour
