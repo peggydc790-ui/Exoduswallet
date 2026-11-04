@@ -19,7 +19,7 @@ V8 introduces the MASTERPIECE portfolio card, a dynamic CoinGecko-powered crypto
 - Existing receipt UI is preserved; advanced receipt work remains deferred.
 
 ## Deployment
-The deployed Worker is `exoduswallet` and its Wrangler configuration serves the `public/` directory. The latest recorded deployment source is Wrangler; this repository currently has no GitHub Actions deployment workflow. A merge to `main` alone does not prove that the Worker has deployed. After the V9 branch is approved, deploy the updated `public/` assets through the existing Wrangler deployment workflow, then verify the live Worker before user testing.
+The deployed Worker is `exoduswallet`. Cloudflare Workers Builds is connected to this GitHub repository with automatic production builds enabled on `main`; the production deploy command is `npx wrangler deploy`. Preview builds run `node --check public/app.js && node --check worker.js` and use `npx wrangler preview`. The Worker serves the `public/` directory through the `ASSETS` binding. Confirm the Cloudflare build and deployment status after merging before user testing.
 
 
 ## V9 interface upgrades
