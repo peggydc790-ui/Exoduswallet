@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 let currentUser = null, currentProfile = null, authMode = "login", feeSettings = {};
 let ASSETS = ["BTC","ETH","USDT"];
 let assetMeta = {BTC:{id:"bitcoin",name:"Bitcoin"},ETH:{id:"ethereum",name:"Ethereum"},USDT:{id:"tether",name:"Tether"}};
-let cataloguePage=1, catalogueRows=[], coinSearchTimer=null, isMasterAdmin=false;
+let cataloguePage=1, catalogueRows=[], coinSearchTimer=null, isMasterAdmin=false, txCache=[];
 
 function showMessage(id, text, bad=false) { const el=$(id); el.textContent=text; el.className="message"+(bad?" error":""); }
 function fmt(value) { const n=Number(value||0); return n.toLocaleString(undefined,{maximumFractionDigits:8}); }
@@ -48,6 +48,8 @@ async function boot(){
   if(profile.account_status==="suspended") { await db.auth.signOut(); throw new Error("This account is suspended. Contact the administrator."); }
   isMasterAdmin=profile.username==="member_0ef824a0" && profile.role==="admin";
   $("wallet-address").textContent=profile.wallet_address||"—";
+  renderContacts();
+  loadMarketChart();
   $("auth-view").classList.add("hidden"); $("app-view").classList.remove("hidden");
   const username=profile.username||"Member", initial=username.slice(0,1).toUpperCase();
   $("welcome-name").textContent=username; $("side-username").textContent=username; $("side-email").textContent=user.email||"";
@@ -56,7 +58,7 @@ async function boot(){
   // Render the signed-in shell first. Optional panels must not prevent the dashboard from appearing.
   try { await loadAssetRegistry(); } catch(err) { console.warn("Asset registry unavailable",err); }
   const tasks=[["balances",loadBalances],["portfolio",loadPortfolio],["transactions",loadTransactions],["fee settings",loadFeeSettings],["catalogue",loadCatalogue],["login event",recordLoginEvent],["login history",loadLoginHistory],["withdrawal history",loadWithdrawalHistory]];
-  if(profile.role==="admin"){tasks.push(["admin statistics",loadAdminStats],["admin withdrawals",loadAdminWithdrawals]);}
+  if(profile.role==="admin"){tasks.push(["admin statistics",loadAdminStats],["admin withdrawals",loadAdminWithdrawals],["admin audit",loadAdminAudit]);}
   const results=await Promise.allSettled(tasks.map(([,fn])=>fn()));
   results.forEach((result,index)=>{if(result.status==="rejected")console.warn(tasks[index][0]+" failed",result.reason);});
 }
@@ -97,8 +99,9 @@ function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;",
 async function loadTransactions(){
   const {data,error}=await db.from("wallet_transactions").select("*").order("created_at",{ascending:false}).limit(50);
   if(error) throw error;
-  const html=data?.length?data.map(transactionRow).join(""):'<div class="empty-state">No transactions yet. Your activity will appear here.</div>';
-  $("recent-list").innerHTML=(data||[]).slice(0,5).map(transactionRow).join("")||'<div class="empty-state">No transactions yet.</div>';
+  txCache=data||[];
+  const html=txCache.length?txCache.map(transactionRow).join(""):'<div class="empty-state">No transactions yet. Your activity will appear here.</div>';
+  $("recent-list").innerHTML=txCache.slice(0,5).map(transactionRow).join("")||'<div class="empty-state">No transactions yet.</div>';
   $("all-list").innerHTML=html;
 }
 $("open-send").addEventListener("click",()=>{$("send-modal").classList.remove("hidden");showMessage("send-message","");updateFeePreview();});
@@ -371,7 +374,8 @@ async function loadPortfolio(){
 
 $("refresh-portfolio")?.addEventListener("click",()=>loadPortfolio().catch(e=>toast(e.message)));
 setInterval(()=>{if(currentUser&&!document.hidden)loadPortfolio().catch(()=>{});},60000);
-async function loadAdminStats(){try{const {data,error}=await db.rpc("admin_dashboard_stats");if(error)throw error;$("admin-stats").innerHTML=`<div class="stat-card"><small>Total members</small><b>${Number(data.members).toLocaleString()}</b></div><div class="stat-card"><small>Transactions</small><b>${Number(data.transactions).toLocaleString()}</b></div><div class="stat-card"><small>Suspended members</small><b>${Number(data.suspended_members).toLocaleString()}</b></div>`;}catch(e){$("admin-stats").textContent=e.message;}}
+async function loadAdminStats(){try{const {data,error}=await db.rpc("admin_dashboard_stats");if(error)throw error;const stats=[["Total members",data.members],["Active members",data.active_members],["Transactions",data.transactions],["Suspended members",data.suspended_members]];$("admin-stats").innerHTML=stats.map(x=>'<div class="stat-card"><small>'+x[0]+'</small><b>'+Number(x[1]).toLocaleString()+'</b></div>').join("");}catch(e){$("admin-stats").textContent=e.message;}}
+async function loadAdminAudit(){const box=$("admin-audit-list");if(!box)return;try{const {data,error}=await db.from("wallet_admin_audit").select("action,target_user,details,created_at").order("created_at",{ascending:false}).limit(20);if(error)throw error;box.innerHTML=data?.length?data.map(x=>'<div class="admin-audit-row"><div><b>'+escapeHtml(String(x.action||"activity").replaceAll("_"," "))+'</b><small>'+escapeHtml(x.target_user||"System")+' · '+new Date(x.created_at).toLocaleString()+'</small><small>'+escapeHtml(JSON.stringify(x.details||{}))+'</small></div></div>').join(""):'<div class="empty-state">No administrator activity recorded yet.</div>';}catch(e){box.innerHTML='<div class="empty-state">Audit records unavailable: '+escapeHtml(e.message)+'</div>';}}
 $("coin-search")?.addEventListener("input",e=>{clearTimeout(coinSearchTimer);coinSearchTimer=setTimeout(()=>loadCatalogue(e.target.value),450);});
 $("load-more-coins")?.addEventListener("click",()=>{cataloguePage++;loadCatalogue();});
 $("catalogue-list")?.addEventListener("click",e=>{const b=e.target.closest("[data-coin-id]");if(b)addCatalogueCoin(b);});
@@ -381,7 +385,7 @@ let pendingTotpFactor=null;
 $("enable-mfa")?.addEventListener("click",async()=>{try{const {data,error}=await db.auth.mfa.enroll({factorType:"totp",friendlyName:"£xodus.wallet authenticator"});if(error)throw error;pendingTotpFactor=data.id;$("mfa-instructions").textContent="Scan this QR code with an authenticator app, then enter its 6-digit code.";$("mfa-qr").src=data.totp.qr_code;$("mfa-qr").classList.remove("hidden");$("mfa-box").classList.remove("hidden");showMessage("security-message","Authenticator setup started.");}catch(e){showMessage("security-message",e.message,true);}});
 $("verify-mfa")?.addEventListener("click",async()=>{try{if(!pendingTotpFactor)throw new Error("Start authenticator setup first.");const {data:challenge,error:ce}=await db.auth.mfa.challenge({factorId:pendingTotpFactor});if(ce)throw ce;const {error}=await db.auth.mfa.verify({factorId:pendingTotpFactor,challengeId:challenge.id,code:$("mfa-code").value.trim()});if(error)throw error;showMessage("security-message","Two-factor authentication enabled.");$("mfa-box").classList.add("hidden");pendingTotpFactor=null;}catch(e){showMessage("security-message",e.message,true);}});
 $("lookup-results")?.addEventListener("click",async e=>{const b=e.target.closest("[data-suspend]");if(!b)return;try{const {error}=await db.rpc("admin_set_account_status",{target_user:b.dataset.suspend,new_status:b.dataset.status});if(error)throw error;toast(`Member ${b.dataset.status}.`);$("lookup-form").requestSubmit();await loadAdminStats();}catch(err){toast(err.message);}});
-const oldGoSection=goSection; goSection=function(name){oldGoSection(name);if(name==="admin"&&currentProfile?.role==="admin")loadAdminStats();};
+const oldGoSection=goSection; goSection=function(name){oldGoSection(name);if(name==="admin"&&currentProfile?.role==="admin"){loadAdminStats();loadAdminAudit();}};
 
 async function loadAssetRegistry(){
  const {data,error}=await db.from("crypto_assets").select("symbol,name,coingecko_id,image_url,market_cap_rank").eq("is_active",true);
@@ -393,3 +397,76 @@ async function loadLoginHistory(){const box=$("login-history");if(!box||!current
 $("limit-form")?.addEventListener("submit",async e=>{e.preventDefault();const min=Number($("limit-min").value),max=$("limit-max").value.trim()===""?null:Number($("limit-max").value);try{const {error}=await db.rpc("admin_set_transfer_limit",{asset_code:$("limit-asset").value,min_value:min,max_value:max});if(error)throw error;showMessage("limit-message","Transfer limits saved.");}catch(err){showMessage("limit-message",err.message,true);}});
 
 $("password-reset-form")?.addEventListener("submit",async e=>{e.preventDefault();const password=$("new-password").value;try{const {error}=await db.auth.updateUser({password});if(error)throw error;$("password-reset-modal").classList.add("hidden");showMessage("auth-message","Password updated. Sign in with your new password.");await db.auth.signOut();}catch(err){showMessage("password-reset-message",err.message,true);}});
+
+// V9 upgrades: address book, receive QR, seven-day market chart, transaction exports and browser alerts.
+function savedContacts(){try{return JSON.parse(localStorage.getItem("exodus_contacts_"+currentUser.id)||"[]");}catch{return [];}}
+function renderContacts(){
+ const box=$("contact-list");if(!box||!currentUser)return;const rows=savedContacts();
+ box.innerHTML=rows.length?rows.map((x,i)=>'<div class="contact-row"><div><b>'+escapeHtml(x.name)+'</b><small>'+escapeHtml(x.address)+'</small></div><div class="contact-actions"><button type="button" data-use-contact="'+i+'">Use</button><button type="button" data-delete-contact="'+i+'">Delete</button></div></div>').join(""):'<div class="empty-state">No saved addresses yet.</div>';
+}
+$("contact-form")?.addEventListener("submit",e=>{
+ e.preventDefault();const name=$("contact-name").value.trim(),address=$("contact-address").value.trim();
+ if(name.length<2||address.length<20||address.length>160){toast("Enter a contact name and a valid-length wallet address.");return;}
+ const rows=savedContacts();if(rows.some(x=>String(x.address).toLowerCase()===address.toLowerCase())){toast("That address is already saved.");return;}
+ rows.push({name,address});localStorage.setItem("exodus_contacts_"+currentUser.id,JSON.stringify(rows));$("contact-form").reset();renderContacts();toast("Address saved on this device.");
+});
+$("contact-list")?.addEventListener("click",e=>{
+ const use=e.target.closest("[data-use-contact]"),del=e.target.closest("[data-delete-contact]");
+ if(use){const c=savedContacts()[Number(use.dataset.useContact)];if(c){$("recipient").value=c.address;$("send-modal").classList.remove("hidden");updateFeePreview();}}
+ if(del){const rows=savedContacts();rows.splice(Number(del.dataset.deleteContact),1);localStorage.setItem("exodus_contacts_"+currentUser.id,JSON.stringify(rows));renderContacts();}
+});
+$("show-wallet-qr")?.addEventListener("click",()=>{
+ const address=$("wallet-address").textContent.trim();if(!address||address==="—"||address==="Loading…"){toast("Wallet address is not available.");return;}
+ $("wallet-qr-code").innerHTML="";$("wallet-qr-address").textContent=address;
+ if(typeof QRCode==="undefined"){toast("QR generator is unavailable. Reload and try again.");return;}
+ new QRCode($("wallet-qr-code"),{text:address,width:210,height:210,colorDark:"#101827",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+ $("wallet-qr-modal").classList.remove("hidden");
+});
+$("receipt-pdf")?.addEventListener("click",()=>{
+ const fields=[["Amount",$("receipt-amount").textContent],["USD value",$("receipt-usd").textContent],["Asset price",$("receipt-price").textContent],["Crypto amount",$("receipt-coin-amount").textContent],["Recipient",$("receipt-recipient").textContent],["Transfer fee",$("receipt-fee").textContent],["Date & time",$("receipt-date").textContent],["Reference",$("receipt-reference").textContent],["Status","Successful"]];
+ const rows=fields.map(x=>"<tr><th>"+escapeHtml(x[0])+"</th><td>"+escapeHtml(x[1])+"</td></tr>").join("");
+ const w=window.open("","_blank");if(!w){toast("Allow pop-ups to print or save the receipt.");return;}
+ w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Exodus transaction receipt</title><style>body{font:14px Arial;color:#172033;margin:40px}h1{font-size:22px}p{color:#68758b}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{text-align:left;padding:13px;border-bottom:1px solid #ddd;overflow-wrap:anywhere}th{width:34%;color:#58657a}</style></head><body><h1>Exodus · Transaction receipt</h1><p>Internal wallet transfer receipt. This is not a blockchain transaction confirmation.</p><table>'+rows+'</table><script>window.onload=function(){window.print()}</script></body></html>');
+ w.document.close();
+});
+function csvCell(v){return '"'+String(v??"").replace(/"/g,'""')+'"';}
+$("export-transactions")?.addEventListener("click",async()=>{
+ try{
+  const {data,error}=await db.from("wallet_transactions").select("id,sender_id,receiver_id,asset,amount,transaction_type,description,fee_amount,fee_asset,market_price_usd,usd_value,created_at").order("created_at",{ascending:false}).limit(5000);
+  if(error)throw error;
+  const rows=[["Reference","Direction","Asset","Amount","Type","Description","Fee amount","Fee asset","Market price USD","Value USD","Date"]];
+  for(const tx of data||[])rows.push([tx.id,tx.sender_id===currentUser.id?"Sent":"Received",tx.asset,tx.amount,tx.transaction_type,tx.description,tx.fee_amount,tx.fee_asset,tx.market_price_usd,tx.usd_value,tx.created_at]);
+  const csv="\uFEFF"+rows.map(row=>row.map(csvCell).join(",")).join("\r\n"),blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="exodus-transactions.csv";a.click();URL.revokeObjectURL(url);toast("Transaction CSV exported.");
+ }catch(err){toast(err.message||"Unable to export transactions.");}
+});
+$("transaction-filter")?.addEventListener("input",e=>{
+ const q=e.target.value.trim().toLowerCase(),rows=txCache.filter(tx=>[tx.asset,tx.transaction_type,tx.description,tx.id].some(v=>String(v||"").toLowerCase().includes(q)));
+ $("all-list").innerHTML=rows.length?rows.map(transactionRow).join(""):'<div class="empty-state">No transactions match that filter.</div>';
+});
+async function loadMarketChart(){
+ const box=$("market-chart");if(!box)return;const id=$("chart-asset").value;box.innerHTML='<div class="empty-state">Loading seven-day market data…</div>';
+ try{
+  const data=await fetchJsonWithTimeout("https://api.coingecko.com/api/v3/coins/"+encodeURIComponent(id)+"/market_chart?vs_currency=usd&days=7&interval=hourly");
+  const vals=(data.prices||[]).map(p=>Number(p[1])).filter(v=>Number.isFinite(v)&&v>0);if(vals.length<2)throw new Error("Not enough market data is available.");
+  const min=Math.min(...vals),max=Math.max(...vals),range=max-min||1,w=760,h=190,pad=12;
+  const coords=vals.map((v,i)=>(pad+i/(vals.length-1)*(w-pad*2))+","+(h-pad-(v-min)/range*(h-pad*2))).join(" ");
+  const first=vals[0],last=vals[vals.length-1],change=(last-first)/first*100;
+  box.innerHTML='<div class="chart-price-row"><b>$'+last.toLocaleString("en-US",{maximumFractionDigits:6})+'</b><span class="'+(change>=0?"positive":"negative")+'">'+(change>=0?"+":"")+change.toFixed(2)+'% · 7 days</span></div><svg viewBox="0 0 '+w+' '+h+'" role="img" aria-label="Seven-day price chart"><polyline points="'+coords+'" fill="none" stroke="#a99aff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="chart-axis"><span>7 days ago</span><span>Now</span></div>';
+  $("market-chart-caption").textContent="CoinGecko · USD · Updated "+new Date().toLocaleTimeString();
+ }catch(err){box.innerHTML='<div class="empty-state">'+escapeHtml(err.message||"Market chart unavailable.")+'</div>';}
+}
+$("chart-asset")?.addEventListener("change",loadMarketChart);
+$("enable-notifications")?.addEventListener("click",async()=>{
+ if(!("Notification" in window)){showMessage("security-message","This browser does not support notifications.",true);return;}
+ const permission=await Notification.requestPermission();if(permission!=="granted"){showMessage("security-message","Browser notification permission was not granted.",true);return;}
+ let cursor=new Date().toISOString();
+ const poll=async()=>{if(!currentUser||document.hidden)return;try{
+  const {data,error}=await db.from("wallet_transactions").select("id,asset,amount,created_at").eq("receiver_id",currentUser.id).gt("created_at",cursor).order("created_at",{ascending:true}).limit(20);if(error)throw error;
+  for(const tx of data||[]){new Notification("Exodus · Incoming transfer",{body:fmt(tx.amount)+" "+tx.asset+" received"});cursor=tx.created_at;}
+ }catch(err){console.warn("Notification polling failed",err.message);}};
+ if(window.exodusNotificationTimer)clearInterval(window.exodusNotificationTimer);window.exodusNotificationTimer=setInterval(poll,45000);
+ showMessage("security-message","Browser alerts enabled while Exodus is open.");
+});
+renderContacts();
+
