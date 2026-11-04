@@ -48,6 +48,8 @@ async function boot(){
   if(profile.account_status==="suspended") { await db.auth.signOut(); throw new Error("This account is suspended. Contact the administrator."); }
   isMasterAdmin=profile.username==="member_0ef824a0" && profile.role==="admin";
   $("wallet-address").textContent=profile.wallet_address||"—";
+  renderContacts();
+  loadMarketChart();
   $("auth-view").classList.add("hidden"); $("app-view").classList.remove("hidden");
   const username=profile.username||"Member", initial=username.slice(0,1).toUpperCase();
   $("welcome-name").textContent=username; $("side-username").textContent=username; $("side-email").textContent=user.email||"";
@@ -466,5 +468,4 @@ $("enable-notifications")?.addEventListener("click",async()=>{
  showMessage("security-message","Browser alerts enabled while Exodus is open.");
 });
 renderContacts();
-if($("chart-asset"))loadMarketChart();
 
