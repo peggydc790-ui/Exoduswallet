@@ -58,7 +58,7 @@ async function boot(){
   // Render the signed-in shell first. Optional panels must not prevent the dashboard from appearing.
   try { await loadAssetRegistry(); } catch(err) { console.warn("Asset registry unavailable",err); }
   const tasks=[["balances",loadBalances],["portfolio",loadPortfolio],["transactions",loadTransactions],["fee settings",loadFeeSettings],["catalogue",loadCatalogue],["login event",recordLoginEvent],["login history",loadLoginHistory],["withdrawal history",loadWithdrawalHistory]];
-  if(profile.role==="admin"){tasks.push(["admin statistics",loadAdminStats],["admin withdrawals",loadAdminWithdrawals]);}
+  if(profile.role==="admin"){tasks.push(["admin statistics",loadAdminStats],["admin withdrawals",loadAdminWithdrawals],["admin audit",loadAdminAudit]);}
   const results=await Promise.allSettled(tasks.map(([,fn])=>fn()));
   results.forEach((result,index)=>{if(result.status==="rejected")console.warn(tasks[index][0]+" failed",result.reason);});
 }
@@ -374,7 +374,8 @@ async function loadPortfolio(){
 
 $("refresh-portfolio")?.addEventListener("click",()=>loadPortfolio().catch(e=>toast(e.message)));
 setInterval(()=>{if(currentUser&&!document.hidden)loadPortfolio().catch(()=>{});},60000);
-async function loadAdminStats(){try{const {data,error}=await db.rpc("admin_dashboard_stats");if(error)throw error;$("admin-stats").innerHTML=`<div class="stat-card"><small>Total members</small><b>${Number(data.members).toLocaleString()}</b></div><div class="stat-card"><small>Transactions</small><b>${Number(data.transactions).toLocaleString()}</b></div><div class="stat-card"><small>Suspended members</small><b>${Number(data.suspended_members).toLocaleString()}</b></div>`;}catch(e){$("admin-stats").textContent=e.message;}}
+async function loadAdminStats(){try{const {data,error}=await db.rpc("admin_dashboard_stats");if(error)throw error;const stats=[["Total members",data.members],["Active members",data.active_members],["Transactions",data.transactions],["Suspended members",data.suspended_members]];$("admin-stats").innerHTML=stats.map(x=>'<div class="stat-card"><small>'+x[0]+'</small><b>'+Number(x[1]).toLocaleString()+'</b></div>').join("");}catch(e){$("admin-stats").textContent=e.message;}}
+async function loadAdminAudit(){const box=$("admin-audit-list");if(!box)return;try{const {data,error}=await db.from("wallet_admin_audit").select("action,target_user,details,created_at").order("created_at",{ascending:false}).limit(20);if(error)throw error;box.innerHTML=data?.length?data.map(x=>'<div class="admin-audit-row"><div><b>'+escapeHtml(String(x.action||"activity").replaceAll("_"," "))+'</b><small>'+escapeHtml(x.target_user||"System")+' · '+new Date(x.created_at).toLocaleString()+'</small><small>'+escapeHtml(JSON.stringify(x.details||{}))+'</small></div></div>').join(""):'<div class="empty-state">No administrator activity recorded yet.</div>';}catch(e){box.innerHTML='<div class="empty-state">Audit records unavailable: '+escapeHtml(e.message)+'</div>';}}
 $("coin-search")?.addEventListener("input",e=>{clearTimeout(coinSearchTimer);coinSearchTimer=setTimeout(()=>loadCatalogue(e.target.value),450);});
 $("load-more-coins")?.addEventListener("click",()=>{cataloguePage++;loadCatalogue();});
 $("catalogue-list")?.addEventListener("click",e=>{const b=e.target.closest("[data-coin-id]");if(b)addCatalogueCoin(b);});
@@ -384,7 +385,7 @@ let pendingTotpFactor=null;
 $("enable-mfa")?.addEventListener("click",async()=>{try{const {data,error}=await db.auth.mfa.enroll({factorType:"totp",friendlyName:"£xodus.wallet authenticator"});if(error)throw error;pendingTotpFactor=data.id;$("mfa-instructions").textContent="Scan this QR code with an authenticator app, then enter its 6-digit code.";$("mfa-qr").src=data.totp.qr_code;$("mfa-qr").classList.remove("hidden");$("mfa-box").classList.remove("hidden");showMessage("security-message","Authenticator setup started.");}catch(e){showMessage("security-message",e.message,true);}});
 $("verify-mfa")?.addEventListener("click",async()=>{try{if(!pendingTotpFactor)throw new Error("Start authenticator setup first.");const {data:challenge,error:ce}=await db.auth.mfa.challenge({factorId:pendingTotpFactor});if(ce)throw ce;const {error}=await db.auth.mfa.verify({factorId:pendingTotpFactor,challengeId:challenge.id,code:$("mfa-code").value.trim()});if(error)throw error;showMessage("security-message","Two-factor authentication enabled.");$("mfa-box").classList.add("hidden");pendingTotpFactor=null;}catch(e){showMessage("security-message",e.message,true);}});
 $("lookup-results")?.addEventListener("click",async e=>{const b=e.target.closest("[data-suspend]");if(!b)return;try{const {error}=await db.rpc("admin_set_account_status",{target_user:b.dataset.suspend,new_status:b.dataset.status});if(error)throw error;toast(`Member ${b.dataset.status}.`);$("lookup-form").requestSubmit();await loadAdminStats();}catch(err){toast(err.message);}});
-const oldGoSection=goSection; goSection=function(name){oldGoSection(name);if(name==="admin"&&currentProfile?.role==="admin")loadAdminStats();};
+const oldGoSection=goSection; goSection=function(name){oldGoSection(name);if(name==="admin"&&currentProfile?.role==="admin"){loadAdminStats();loadAdminAudit();}};
 
 async function loadAssetRegistry(){
  const {data,error}=await db.from("crypto_assets").select("symbol,name,coingecko_id,image_url,market_cap_rank").eq("is_active",true);
